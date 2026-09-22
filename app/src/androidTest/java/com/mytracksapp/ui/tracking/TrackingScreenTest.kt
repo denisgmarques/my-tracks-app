@@ -1,0 +1,163 @@
+package com.mytracksapp.ui.tracking
+
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.google.android.gms.maps.model.LatLng
+import com.mytracksapp.data.local.dao.GpsPointDao
+import com.mytracksapp.data.local.entity.GpsPointEntity
+import java.util.Collections
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+
+/**
+ * In-memory [GpsPointDao] double: each session id gets its own [MutableStateFlow] the test can
+ * push new emissions into, simulating Room's `Flow` re-running after a new point is persisted —
+ * same fake-DAO pattern `TrackingViewModelTest` (T08, unit) uses, here driving a real
+ * instrumented Compose UI test end to end.
+ */
+private class FakeGpsPointDao : GpsPointDao {
+    private val pointsBySession = mutableMapOf<String, MutableStateFlow<List<GpsPointEntity>>>()
+
+    private fun flowFor(sessionId: String): MutableStateFlow<List<GpsPointEntity>> =
+        pointsBySession.getOrPut(sessionId) { MutableStateFlow(emptyList()) }
+
+    override suspend fun insert(point: GpsPointEntity): Long {
+        val flow = flowFor(point.sessionId)
+        flow.value = flow.value + point
+        return flow.value.size.toLong()
+    }
+
+    override suspend fun insertAll(points: List<GpsPointEntity>): List<Long> = points.map { insert(it) }
+
+    override fun getPointsForSession(sessionId: String): Flow<List<GpsPointEntity>> = flowFor(sessionId)
+
+    override suspend fun countForSession(sessionId: String): Int = flowFor(sessionId).value.size
+}
+
+/**
+ * T09 — instrumented Compose UI test for [TrackingScreen] (UI-02, UI-03):
+ *  - the 5 UI-03 metrics are visible simultaneously, with no extra navigation required;
+ *  - the polyline [MapComponent] computes from [TrackingViewModel] state gains each new point as
+ *    its last vertex.
+ *
+ * [MapComponent] genuinely instantiates the real `com.google.android.gms.maps.MapView`/
+ * `GoogleMap` (see MapComponent.kt) — this test does not stub that away. What it deliberately
+ * does NOT assert on is rendered map tiles/pixels, since that needs network access and a real
+ * Google Cloud API key this prototype does not ship (docs/setup/google-maps-api-key.md); without
+ * one, the underlying Play services renderer may log an authorization error and never finish
+ * "readying" the map within a test's lifetime. Instead this test uses `MapComponent`'s
+ * `onPolylineApplied` seam, which reports the point list it computed for the current ViewModel
+ * state independently of whether the real map has finished initializing — exactly the
+ * state-driven behavior UI-02 requires, without depending on Play Services' own timing.
+ */
+@RunWith(AndroidJUnit4::class)
+class TrackingScreenTest {
+
+    @get:Rule
+    val composeTestRule = createComposeRule()
+
+    @Test
+    fun allFiveUi03MetricsAreVisibleSimultaneouslyWithNoExtraNavigation() {
+        val sessionId = "tracking-screen-test-metrics"
+        val viewModel = TrackingViewModel(sessionId, FakeGpsPointDao())
+
+        composeTestRule.setContent {
+            TrackingScreen(viewModel = viewModel)
+        }
+
+        composeTestRule.onNodeWithTag(TrackingScreenTestTags.INSTANT_SPEED).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(TrackingScreenTestTags.AVERAGE_SPEED).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(TrackingScreenTestTags.ELAPSED_TIME).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(TrackingScreenTestTags.STOPPED_TIME).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(TrackingScreenTestTags.MOVING_TIME).assertIsDisplayed()
+    }
+
+    @Test
+    fun mapComponentIsGenuinelyPresentInTheScreen() {
+        val sessionId = "tracking-screen-test-map"
+        val viewModel = TrackingViewModel(sessionId, FakeGpsPointDao())
+
+        composeTestRule.setContent {
+            TrackingScreen(viewModel = viewModel)
+        }
+
+        composeTestRule.onNodeWithTag(MapComponentTestTags.MAP_VIEW).assertIsDisplayed()
+    }
+
+    @Test
+    fun eachNewPointBecomesThePolylinesLastVertex() {
+        val sessionId = "tracking-screen-test-polyline"
+        val dao = FakeGpsPointDao()
+        val viewModel = TrackingViewModel(sessionId, dao)
+        val appliedPolylines = Collections.synchronizedList(mutableListOf<List<LatLng>>())
+
+        composeTestRule.setContent {
+            TrackingScreen(
+                viewModel = viewModel,
+                onPolylineApplied = { appliedPolylines.add(it) },
+            )
+        }
+
+        // First point: a single vertex can't form a line yet, but the ViewModel state and
+        // MapComponent's computed point list both already reflect it.
+        runBlocking {
+            dao.insert(
+                GpsPointEntity(sessionId = sessionId, timestamp = 0L, latitude = 10.0, longitude = 20.0, accuracy = 5f),
+            )
+        }
+        composeTestRule.waitUntil(timeoutMillis = 5_000) { viewModel.uiState.value.polyline.size == 1 }
+        composeTestRule.waitForIdle()
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            appliedPolylines.isNotEmpty() && appliedPolylines.last().size == 1
+        }
+        assertEquals(LatLng(10.0, 20.0), appliedPolylines.last().last())
+
+        // Second point: becomes the new last vertex.
+        runBlocking {
+            dao.insert(
+                GpsPointEntity(
+                    sessionId = sessionId, timestamp = 10_000L,
+                    latitude = 10.001, longitude = 20.0, accuracy = 5f,
+                ),
+            )
+        }
+        composeTestRule.waitUntil(timeoutMillis = 5_000) { viewModel.uiState.value.polyline.size == 2 }
+        composeTestRule.waitForIdle()
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            appliedPolylines.isNotEmpty() && appliedPolylines.last().size == 2
+        }
+
+        var state = viewModel.uiState.value
+        assertEquals(2, state.polyline.size)
+        assertEquals(10.001, state.polyline.last().latitude, 0.0)
+        assertEquals(20.0, state.polyline.last().longitude, 0.0)
+        assertEquals(LatLng(10.001, 20.0), appliedPolylines.last().last())
+
+        // Third point: last vertex advances again.
+        runBlocking {
+            dao.insert(
+                GpsPointEntity(
+                    sessionId = sessionId, timestamp = 20_000L,
+                    latitude = 10.002, longitude = 20.0, accuracy = 5f,
+                ),
+            )
+        }
+        composeTestRule.waitUntil(timeoutMillis = 5_000) { viewModel.uiState.value.polyline.size == 3 }
+        composeTestRule.waitForIdle()
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            appliedPolylines.isNotEmpty() && appliedPolylines.last().size == 3
+        }
+
+        state = viewModel.uiState.value
+        assertEquals(3, state.polyline.size)
+        assertEquals(10.002, state.polyline.last().latitude, 0.0)
+        assertEquals(LatLng(10.002, 20.0), appliedPolylines.last().last())
+    }
+}

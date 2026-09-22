@@ -11,6 +11,17 @@
         android:label="My Tracks App"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
 
+        <!--
+          T09 — Google Maps SDK for Android API key. Value is sourced from
+          app/src/main/res/values/google_maps_api.xml, which is a placeholder
+          ("YOUR_API_KEY_HERE") and MUST be replaced by a developer's own key from Google
+          Cloud Console before the map will render real tiles. See
+          docs/setup/google-maps-api-key.md.
+        -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="@string/google_maps_api_key" />
+
         <service
             android:name=".service.LocationForegroundService"
             android:exported="false"

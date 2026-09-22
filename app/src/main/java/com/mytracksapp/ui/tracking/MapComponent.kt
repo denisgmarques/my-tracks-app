@@ -21,6 +21,7 @@ import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.MapView
 import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.LatLngBounds
 import com.google.android.gms.maps.model.Polyline
 import com.google.android.gms.maps.model.PolylineOptions
 
@@ -105,6 +106,12 @@ fun MapComponent(
 
     // Separately (best-effort): once the real map is ready, actually draw/replace the polyline
     // overlay on it every time the ViewModel's state changes.
+    //
+    // Camera framing matters as much as the overlay itself: `newLatLng` alone only PANS, it never
+    // zooms, so at the map's default (world-view) zoom level a walking-scale route is a handful of
+    // meters — visually indistinguishable from a single point. A single collected point zooms in
+    // close (street level); two or more points fit the camera to the route's bounding box (with
+    // padding) so the whole trail collected so far is always framed, not just its last vertex.
     LaunchedEffect(polyline, googleMap) {
         val map = googleMap ?: return@LaunchedEffect
         currentOverlay?.remove()
@@ -114,7 +121,25 @@ fun MapComponent(
         } else {
             null
         }
-        latLngPoints.lastOrNull()?.let { last -> map.moveCamera(CameraUpdateFactory.newLatLng(last)) }
+        when {
+            latLngPoints.size == 1 -> {
+                map.moveCamera(CameraUpdateFactory.newLatLngZoom(latLngPoints.first(), 18f))
+            }
+            latLngPoints.size >= 2 -> {
+                val bounds = LatLngBounds.builder().apply {
+                    latLngPoints.forEach { include(it) }
+                }.build()
+                // `newLatLngBounds` throws if the MapView hasn't completed its first layout pass
+                // yet (size still 0x0) — a real race the very first time a point arrives right as
+                // the map surface attaches. Falls back to a plain pan on the last point rather
+                // than crashing; the very next point recomputes bounds and self-corrects.
+                try {
+                    map.moveCamera(CameraUpdateFactory.newLatLngBounds(bounds, 100))
+                } catch (_: IllegalStateException) {
+                    map.moveCamera(CameraUpdateFactory.newLatLng(latLngPoints.last()))
+                }
+            }
+        }
     }
 
     AndroidView(

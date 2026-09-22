@@ -158,8 +158,15 @@ fun MyTracksApp(
                     gpsPointDao = gpsPointDao,
                     sessionController = sessionController,
                     onSessionFinished = {
+                        // `inclusive = true` clears the New Session entry too, not just Tracking's.
+                        // Leaving New Session's entry alive kept its ViewModel (and NavBackStackEntry
+                        // saved state) around indefinitely; combined with the bottom bar's own
+                        // `restoreState = true` navigate, tapping "Nova sessão" from History could
+                        // try to restore that stale, already-once-consumed state instead of composing
+                        // a fresh instance — clearing it here guarantees the next visit to New
+                        // Session always starts clean.
                         navController.navigate(Routes.HISTORY) {
-                            popUpTo(Routes.NEW_SESSION)
+                            popUpTo(Routes.NEW_SESSION) { inclusive = true }
                         }
                     },
                 )

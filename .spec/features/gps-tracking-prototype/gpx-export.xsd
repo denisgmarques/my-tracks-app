@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Contract: CT-01 (SPEC.md, gps-tracking-prototype, v1.1)
+  Trace: RF-08 (exportação de sessão concluída em GPX)
+  Escopo: perfil ESTRITO de GPX 1.1 (namespace oficial topografix) contendo
+  apenas os elementos exigidos pelo texto literal de CT-01:
+    <gpx><trk><trkseg><trkpt lat="…" lon="…"><time>…</time></trkpt></trkseg></trk></gpx>
+  Elementos opcionais do GPX 1.1 completo (ex.: <ele>, <extensions>, <wpt>, <rte>)
+  NÃO fazem parte deste contrato porque não têm respaldo em CT-01/RF-08. Se uma
+  implementação futura precisar deles, atualizar SPEC.md (RIGID) antes deste
+  schema — ver PLAN.md > Open Questions.
+  Compatibilidade: não há schema GPX pré-existente no repositório (feature
+  greenfield); este arquivo é a primeira definição formal do contrato.
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:gpx="http://www.topografix.com/GPX/1/1"
+           targetNamespace="http://www.topografix.com/GPX/1/1"
+           elementFormDefault="qualified">
+
+  <xs:element name="gpx">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="gpx:trk" minOccurs="1" maxOccurs="1"/>
+      </xs:sequence>
+      <xs:attribute name="version" type="xs:string" fixed="1.1" use="required"/>
+      <xs:attribute name="creator" type="xs:string" use="required"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="trk">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="gpx:trkseg" minOccurs="1" maxOccurs="1"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="trkseg">
+    <xs:complexType>
+      <xs:sequence>
+        <!-- "um <trkpt> por ponto coletado" (CT-01): minOccurs=1 assume que apenas
+             sessões com pelo menos um ponto são exportáveis (RF-08 exige sessão
+             "concluída", que por RF-02 só existe se houve coleta ativa). -->
+        <xs:element ref="gpx:trkpt" minOccurs="1" maxOccurs="unbounded"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="trkpt">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="time" type="xs:dateTime" minOccurs="1" maxOccurs="1"/>
+      </xs:sequence>
+      <xs:attribute name="lat" type="gpx:latitudeType" use="required"/>
+      <xs:attribute name="lon" type="gpx:longitudeType" use="required"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:simpleType name="latitudeType">
+    <xs:restriction base="xs:decimal">
+      <xs:minInclusive value="-90.0"/>
+      <xs:maxInclusive value="90.0"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="longitudeType">
+    <xs:restriction base="xs:decimal">
+      <xs:minInclusive value="-180.0"/>
+      <xs:maxInclusive value="180.0"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+</xs:schema>

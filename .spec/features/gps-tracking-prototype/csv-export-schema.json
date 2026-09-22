@@ -1,0 +1,52 @@
+{
+  "$schema": "https://frictionlessdata.io/schemas/table-schema.json",
+  "_contract": "CT-02 (SPEC.md, gps-tracking-prototype, v1.1)",
+  "_trace": ["RF-08"],
+  "_note": "Não há contrato CSV pré-existente no repositório (feature greenfield); este arquivo é a primeira definição formal do contrato. Dialeto: uma linha de cabeçalho seguida de uma linha por ponto coletado; delimitador vírgula (','); codificação UTF-8. `session_id` e `segment_status` tiveram tipo/formato/enum decididos pelo desenvolvedor em 2026-09-22 (ver PLAN.md > Assumptions, task T11).",
+  "fields": [
+    {
+      "name": "session_id",
+      "type": "string",
+      "format": "uuid",
+      "description": "Identificador da sessão à qual o ponto pertence — string UUID, mesmo formato da chave primária da entidade Room `TrackingSessionEntity` (id). Decisão registrada em 2026-09-22 — ver PLAN.md T11.",
+      "constraints": { "required": true }
+    },
+    {
+      "name": "timestamp",
+      "type": "datetime",
+      "format": "%Y-%m-%dT%H:%M:%S%z",
+      "description": "Timestamp real observado no dispositivo no momento da coleta do ponto (ISO-8601), conforme RNF-03.",
+      "constraints": { "required": true }
+    },
+    {
+      "name": "latitude",
+      "type": "number",
+      "constraints": { "required": true, "minimum": -90, "maximum": 90 }
+    },
+    {
+      "name": "longitude",
+      "type": "number",
+      "constraints": { "required": true, "minimum": -180, "maximum": 180 }
+    },
+    {
+      "name": "accuracy",
+      "type": "number",
+      "description": "Acurácia reportada pelo provedor de localização, em metros.",
+      "constraints": { "required": true, "minimum": 0 }
+    },
+    {
+      "name": "speed_instant",
+      "type": "number",
+      "description": "Velocidade instantânea calculada entre este ponto e o ponto anterior (RF-05), em m/s.",
+      "constraints": { "required": true, "minimum": 0 }
+    },
+    {
+      "name": "segment_status",
+      "type": "string",
+      "description": "Classificação do ponto conforme a regra de 150m/5min (RF-06): `moving` (em movimento) ou `stopped` (parado). Literais fixados em inglês, decisão registrada em 2026-09-22 — ver PLAN.md T11.",
+      "constraints": { "required": true, "enum": ["moving", "stopped"] }
+    }
+  ],
+  "primaryKey": [],
+  "missingValues": [""]
+}

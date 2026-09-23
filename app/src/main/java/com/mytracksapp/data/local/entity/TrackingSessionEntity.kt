@@ -42,4 +42,6 @@ data class TrackingSessionEntity(
     val stoppedTimeMillis: Long = 0L,
     val movingTimeMillis: Long = 0L,
     val averageSpeedMetersPerSecond: Double = 0.0,
+    val locationName: String? = null,
+    val distanceMeters: Double = 0.0,
 )

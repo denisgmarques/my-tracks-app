@@ -4,12 +4,15 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStoreFile
+import com.mytracksapp.domain.export.ExportFormat
+import com.mytracksapp.domain.model.GpsPrecision
 import com.mytracksapp.domain.model.SamplingInterval
 import com.mytracksapp.domain.stats.SegmentClassifier
 import com.mytracksapp.domain.units.DistanceUnit
@@ -28,6 +31,9 @@ data class UserSettings(
     val distanceUnit: DistanceUnit = DistanceUnit.KM,
     val stopRadiusMeters: Double = SegmentClassifier.STOP_RADIUS_METERS,
     val stopDurationMillis: Long = SegmentClassifier.STOP_DURATION_MILLIS,
+    val gpsPrecision: GpsPrecision = GpsPrecision.HIGH_ACCURACY,
+    val keepScreenOnEnabled: Boolean = true,
+    val defaultExportFormat: ExportFormat = ExportFormat.GPX,
 )
 
 /** Preference keys, kept private so [UserSettings] (typed, enum-based) is the only public surface. */
@@ -37,6 +43,9 @@ private object Keys {
     val DISTANCE_UNIT = stringPreferencesKey("distance_unit")
     val STOP_RADIUS_METERS = doublePreferencesKey("stop_radius_meters")
     val STOP_DURATION_MILLIS = longPreferencesKey("stop_duration_millis")
+    val GPS_PRECISION = stringPreferencesKey("gps_precision")
+    val KEEP_SCREEN_ON_ENABLED = booleanPreferencesKey("keep_screen_on_enabled")
+    val DEFAULT_EXPORT_FORMAT = stringPreferencesKey("default_export_format")
 }
 
 /**
@@ -87,6 +96,18 @@ class SettingsRepository(
         dataStore.edit { it[Keys.STOP_DURATION_MILLIS] = millis }
     }
 
+    suspend fun setGpsPrecision(precision: GpsPrecision) {
+        dataStore.edit { it[Keys.GPS_PRECISION] = precision.name }
+    }
+
+    suspend fun setKeepScreenOnEnabled(enabled: Boolean) {
+        dataStore.edit { it[Keys.KEEP_SCREEN_ON_ENABLED] = enabled }
+    }
+
+    suspend fun setDefaultExportFormat(format: ExportFormat) {
+        dataStore.edit { it[Keys.DEFAULT_EXPORT_FORMAT] = format.name }
+    }
+
     private fun Preferences.toUserSettings(): UserSettings {
         val defaults = UserSettings()
         val samplingIntervalSeconds = this[Keys.SAMPLING_INTERVAL_SECONDS]
@@ -102,12 +123,23 @@ class SettingsRepository(
             ?.let { name -> runCatching { DistanceUnit.valueOf(name) }.getOrNull() }
             ?: defaults.distanceUnit
 
+        val gpsPrecision = this[Keys.GPS_PRECISION]
+            ?.let { name -> runCatching { GpsPrecision.valueOf(name) }.getOrNull() }
+            ?: defaults.gpsPrecision
+
+        val defaultExportFormat = this[Keys.DEFAULT_EXPORT_FORMAT]
+            ?.let { name -> runCatching { ExportFormat.valueOf(name) }.getOrNull() }
+            ?: defaults.defaultExportFormat
+
         return UserSettings(
             samplingInterval = samplingInterval,
             speedUnit = speedUnit,
             distanceUnit = distanceUnit,
             stopRadiusMeters = this[Keys.STOP_RADIUS_METERS] ?: defaults.stopRadiusMeters,
             stopDurationMillis = this[Keys.STOP_DURATION_MILLIS] ?: defaults.stopDurationMillis,
+            gpsPrecision = gpsPrecision,
+            keepScreenOnEnabled = this[Keys.KEEP_SCREEN_ON_ENABLED] ?: defaults.keepScreenOnEnabled,
+            defaultExportFormat = defaultExportFormat,
         )
     }
 

@@ -72,6 +72,7 @@ class LocationCollectorTest {
         interval: SamplingInterval = SamplingInterval.TEN_SECONDS,
         sessionActive: () -> Boolean = { true },
         permissionGranted: () -> Boolean = { true },
+        onFirstPointRecorded: (latitude: Double, longitude: Double) -> Unit = { _, _ -> },
     ) = LocationCollector(
         sessionId = sessionId,
         interval = interval,
@@ -79,6 +80,7 @@ class LocationCollectorTest {
         locationSampleSource = locationSampleSource,
         isSessionActive = sessionActive,
         isLocationPermissionGranted = permissionGranted,
+        onFirstPointRecorded = onFirstPointRecorded,
     )
 
     @Test
@@ -145,4 +147,51 @@ class LocationCollectorTest {
             // emit() would fail-fast via error(); this proves no more points can arrive once stopped.
             assertTrue(gpsPointDao.insertedPoints.size == 1)
         }
+
+    @Test
+    fun `onFirstPointRecorded fires exactly once with the exact coordinates of the first accepted point`() =
+        runBlocking {
+            val recordedCalls = mutableListOf<Pair<Double, Double>>()
+            collector(onFirstPointRecorded = { latitude, longitude -> recordedCalls += latitude to longitude })
+                .start()
+
+            locationSampleSource.emit(
+                LocationSample(latitude = 10.123, longitude = 20.456, accuracy = 5f, timestamp = 0L),
+            )
+
+            assertEquals(1, recordedCalls.size)
+            assertEquals(10.123 to 20.456, recordedCalls.single())
+        }
+
+    @Test
+    fun `onFirstPointRecorded does not fire again for subsequent points in the same session`() = runBlocking {
+        val recordedCalls = mutableListOf<Pair<Double, Double>>()
+        collector(onFirstPointRecorded = { latitude, longitude -> recordedCalls += latitude to longitude })
+            .start()
+
+        locationSampleSource.emit(
+            LocationSample(latitude = 1.0, longitude = 1.0, accuracy = 5f, timestamp = 0L),
+        )
+        locationSampleSource.emit(
+            LocationSample(latitude = 2.0, longitude = 2.0, accuracy = 5f, timestamp = 10_000L),
+        )
+        locationSampleSource.emit(
+            LocationSample(latitude = 3.0, longitude = 3.0, accuracy = 5f, timestamp = 20_000L),
+        )
+
+        assertEquals(1, recordedCalls.size)
+        assertEquals(1.0 to 1.0, recordedCalls.single())
+    }
+
+    @Test
+    fun `onFirstPointRecorded does not fire if start returns false`() = runBlocking {
+        val recordedCalls = mutableListOf<Pair<Double, Double>>()
+        val started = collector(
+            permissionGranted = { false },
+            onFirstPointRecorded = { latitude, longitude -> recordedCalls += latitude to longitude },
+        ).start()
+
+        assertTrue(!started)
+        assertTrue(recordedCalls.isEmpty())
+    }
 }

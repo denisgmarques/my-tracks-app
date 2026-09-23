@@ -60,6 +60,7 @@ class LocationCollector(
     private val locationSampleSource: LocationSampleSource,
     private val isSessionActive: suspend () -> Boolean,
     private val isLocationPermissionGranted: () -> Boolean,
+    private val onFirstPointRecorded: (latitude: Double, longitude: Double) -> Unit = { _, _ -> },
 ) {
     private val configuredIntervalMillis: Long = interval.seconds * 1_000L
 
@@ -115,5 +116,9 @@ class LocationCollector(
             ),
         )
         lastAcceptedTimestamp = sample.timestamp
+
+        if (previousTimestamp == null) {
+            onFirstPointRecorded(sample.latitude, sample.longitude)
+        }
     }
 }

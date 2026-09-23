@@ -4,20 +4,19 @@
 - Source: developer description via /plan
 - Service: my-tracks-app (Android/Kotlin/Compose, single repo)
 - Tier: standard
-- Version: 1.0
+- Version: 1.1
 - Architecture references: missing — no `AGENTS.md`, `docs/agents/`, or `.github/copilot-instructions.md` found in the repository (verified: only `.spec/`, `app/`, `design_handoff_my_tracks/` exist at root). Developer confirmed proceeding without one; per process this is still flagged below rather than silently assumed.
 
 ## Context
 My Tracks já implementou um protótipo completo de rastreamento GPS (`.spec/features/gps-tracking-prototype/SPEC.md`) e, em fases de acompanhamento não documentadas formalmente, adicionou: `SettingsRepository` (DataStore Preferences) com `UserSettings(samplingInterval, speedUnit, distanceUnit, stopRadiusMeters, stopDurationMillis)`; swipe-to-delete por sessão em `HistoryListScreen`; e o design system "Organic" (paleta terracota/sage, fontes Caprasimo/Figtree) já aplicado a `TrackingScreen` (e, em uma frente separada deste plano, a `SessionDetailScreen`).
 
-Esta feature redesenha **Histórico** (`HistoryListScreen`) e **Configurações** (`SettingsScreen`) no design Organic e adiciona 5 capacidades novas de dados/comportamento: (1) nome de local via geocodificação reversa por sessão, (2) precisão de GPS configurável, (3) manter tela ativa durante a sessão, (4) alerta de pausa longa, (5) formato de exportação padrão sem diálogo por exportação, além de (6) uma ação de limpar todo o histórico.
+Esta feature redesenha **Histórico** (`HistoryListScreen`) e **Configurações** (`SettingsScreen`) no design Organic e adiciona 4 capacidades novas de dados/comportamento: (1) nome de local via geocodificação reversa por sessão, (2) precisão de GPS configurável, (3) manter tela ativa durante a sessão, (4) formato de exportação padrão sem diálogo por exportação, além de uma ação de limpar todo o histórico.
 
 Investigação do código confirma lacunas que este SPEC precisa fechar:
 - `TrackingSessionEntity` (verified at `app/src/main/java/com/mytracksapp/data/local/entity/TrackingSessionEntity.kt:35-45`) não tem campo de nome de local nem de distância total persistida — apenas `stoppedTimeMillis`, `movingTimeMillis`, `averageSpeedMetersPerSecond` são gravados em `SessionControllerImpl.stopSession()` (verified at `app/src/main/java/com/mytracksapp/domain/session/SessionControllerImpl.kt:113-122`).
 - `HistoryListItem`/`HistoryViewModel` (verified at `app/src/main/java/com/mytracksapp/ui/history/HistoryViewModel.kt:24-47`) hoje só exibem data + duração; não há nome de local nem distância.
 - `LocationForegroundService.kt`'s `FusedLocationSampleSource.start()` constrói `LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, intervalMillis)` com a prioridade **fixa** no código (verified at `app/src/main/java/com/mytracksapp/service/LocationForegroundService.kt:49`), não configurável hoje.
 - Não existe nenhum uso de `FLAG_KEEP_SCREEN_ON`/`keepScreenOn` no código (grep sem resultados) — a funcionalidade de manter tela ativa é inteiramente nova.
-- Não existe nenhum `NotificationManager`/`NotificationChannel` além do canal do próprio `LocationForegroundService` (verified at `app/src/main/java/com/mytracksapp/service/LocationForegroundService.kt:152-168`) — qualquer alerta de pausa longa via notificação do sistema precisaria reaproveitar ou criar um canal.
 - `ExportFormatDialog` (verified at `app/src/main/java/com/mytracksapp/ui/export/ExportFormatDialog.kt`) hoje é exibido a cada toque em "Exportar" em `SessionDetailScreen` (verified at `app/src/main/java/com/mytracksapp/ui/history/SessionDetailScreen.kt:319-331, 430-438`) — este SPEC retira esse diálogo do caminho de exportação por sessão.
 - `TrackingSessionDao` (verified at `app/src/main/java/com/mytracksapp/data/local/dao/TrackingSessionDao.kt`) só tem `deleteById(sessionId)`; não há operação de exclusão em massa. O FK `GpsPointEntity -> TrackingSessionEntity` já usa `onDelete = ForeignKey.CASCADE` (verified at `app/src/main/java/com/mytracksapp/data/local/entity/GpsPointEntity.kt:31-36`), então uma exclusão em massa de sessões já arrasta os pontos GPS associados sem lógica adicional.
 - O `AndroidManifest.xml` (verified at `app/src/main/AndroidManifest.xml:4-7`) não declara `INTERNET` explicitamente; a dependência do Google Maps SDK já mescla `INTERNET`/`ACCESS_NETWORK_STATE` transitivamente (fato já confirmado em fase anterior) — a geocodificação reversa (AC1) depende dessa permissão transitiva, e este SPEC não adiciona uma declaração explícita nova.
@@ -51,17 +50,16 @@ flowchart LR
     HVM2 --> HLS2["HistoryListScreen (alterado)"]
     HLS2 -->|"tap"| SDS2["SessionDetailScreen"]
     SDS2 -->|"tap Exportar (alterado)"| ES2["ExportService"]
-    SS2["SettingsScreen (alterado)"] --> SR2[("SettingsRepository / DataStore<br/>+ gpsPrecision + keepScreenOnEnabled<br/>+ longPauseAlertEnabled + defaultExportFormat (novo)")]
+    SS2["SettingsScreen (alterado)"] --> SR2[("SettingsRepository / DataStore<br/>+ gpsPrecision + keepScreenOnEnabled<br/>+ defaultExportFormat (novo)")]
     SS2 -->|"Limpar histórico (novo)"| DB2
     SR2 -->|"gpsPrecision"| FLSS2["FusedLocationSampleSource (alterado)"]
     SR2 -->|"keepScreenOnEnabled"| TS2["TrackingScreen (alterado)"]
-    SR2 -->|"longPauseAlertEnabled + limiar"| NEW_ALERT["Alerta de pausa longa (novo)"]
 ```
 
-`NEW_GEO` realiza RF-01/RF-02/RF-03; `locationName`/`distanceMeters` em `DB2` realizam CT-01/CT-02/RF-13. `HistoryListScreen (alterado)` realiza UI-01/UI-02/UI-03/UI-09. `SettingsScreen (alterado)` e `SettingsRepository` realizam RF-04 a RF-12 e UI-04 a UI-09. `NEW_ALERT` realiza RF-08/RF-09 (bloqueado por marcadores de clarificação — ver RF-09).
+`NEW_GEO` realiza RF-01/RF-02/RF-03; `locationName`/`distanceMeters` em `DB2` realizam CT-01/CT-02/RF-13. `HistoryListScreen (alterado)` realiza UI-01/UI-02/UI-03/UI-09. `SettingsScreen (alterado)` e `SettingsRepository` realizam RF-04 a RF-12 e UI-04 a UI-09.
 
 ## Scope
-- **In**: redesign visual (Organic) de Histórico e Configurações; nome de local por sessão (geocodificação reversa best-effort); exibição de distância total no card de Histórico; seleção de precisão de GPS; toggle de manter tela ativa; toggle de alerta de pausa longa (gatilho e mecanismo de entrega pendentes de clarificação); seleção de formato de exportação padrão e remoção do diálogo por exportação individual; ação de limpar todo o histórico com confirmação.
+- **In**: redesign visual (Organic) de Histórico e Configurações; nome de local por sessão (geocodificação reversa best-effort); exibição de distância total no card de Histórico; seleção de precisão de GPS; toggle de manter tela ativa; seleção de formato de exportação padrão e remoção do diálogo por exportação individual; ação de limpar todo o histórico com confirmação.
 - **Out**: geocodificação reversa retroativa para sessões já existentes antes desta feature (campo fica vazio/rótulo genérico para elas, sem backfill); qualquer retry automático de geocodificação; correção do fluxo de permissão de localização em segundo plano (API 30+, já documentado como limitação conhecida em `AppNavigation.kt`); qualquer mudança em `TrackingScreen`/`SessionDetailScreen` além do necessário para manter-tela-ativa e para o botão "Exportar" usar o formato padrão.
 
 ## RIGID (Non-Negotiable)
@@ -88,12 +86,6 @@ flowchart LR
 
 - RF-07 [State-Driven]: ENQUANTO uma sessão de coleta estiver ativa E a preferência "Manter tela ativa durante a sessão" estiver ativada, a tela de sessão ativa DEVE impedir o apagamento automático da tela do dispositivo; ENQUANTO a preferência estiver desativada, o comportamento padrão do sistema operacional se aplica sem interferência do app.
   - AC: com a preferência ativada, a tela do dispositivo permanece acesa continuamente durante uma sessão ativa exibida em primeiro plano, mesmo além do timeout de tela configurado no sistema; com a preferência desativada, o timeout de tela do sistema ocorre normalmente durante a mesma sessão.
-
-- RF-08 [State-Driven]: o sistema DEVE persistir a preferência "Alerta de pausa longa" (booleana), com valor padrão `false` quando nunca configurada, sobrevivendo a reinícios do app.
-  - AC: em uma instalação nova, o valor efetivo é `false`; alterar e reiniciar o app preserva o valor escolhido.
-
-- RF-09 [Conditional]: ENQUANTO uma sessão estiver ativa E "Alerta de pausa longa" estiver ativado, QUANDO o segmento de parada corrente (classificado como `STOPPED` por `SegmentClassifier`) permanecer contínuo por mais tempo que [NEEDS CLARIFICATION: qual limiar aciona o alerta — reutilizar o mesmo `stopDurationMillis` já usado para classificar parado/em movimento (`SettingsRepository`/`SegmentClassifier.STOP_DURATION_MILLIS`), ou introduzir um limiar independente e configurável separadamente para o alerta?], o sistema DEVE notificar o usuário via [NEEDS CLARIFICATION: qual mecanismo de entrega — notificação do sistema Android (`NotificationManager`, com canal dedicado, funcionando mesmo com o app em segundo plano, análogo ao canal já usado por `LocationForegroundService`) ou um banner/toast somente dentro do app (não funciona em segundo plano)?].
-  - AC: bloqueado pelas duas clarificações acima — não testável até resolução; nenhuma AC binária pode ser fixada sem definir limiar e mecanismo de entrega.
 
 - RF-10 [State-Driven]: o sistema DEVE persistir a preferência "Formato de exportação padrão", com os dois valores possíveis GPX e CSV, valor padrão GPX quando nunca configurada, sobrevivendo a reinícios do app.
   - AC: em uma instalação nova, o valor efetivo é GPX; alterar e reiniciar o app preserva o valor escolhido.
@@ -124,9 +116,6 @@ flowchart LR
 - UI-05 [State-Driven]: Configurações DEVE oferecer um switch "Manter tela ativa durante a sessão" (estilo pill, per `organic-styles.css`), refletindo e persistindo o estado imediatamente ao toque.
   - AC: alternar o switch persiste imediatamente o novo valor booleano e atualiza o estado visual do switch.
 
-- UI-06 [State-Driven]: Configurações DEVE oferecer um switch "Alerta de pausa longa" (estilo pill), refletindo e persistindo o estado imediatamente ao toque.
-  - AC: alternar o switch persiste imediatamente o novo valor booleano e atualiza o estado visual do switch.
-
 - UI-07 [State-Driven]: Configurações DEVE oferecer um controle para escolher o "Formato de exportação" padrão entre GPX e CSV, exibindo o valor atualmente selecionado, refletindo e persistindo a seleção imediatamente ao toque.
   - AC: selecionar GPX ou CSV nesse controle persiste imediatamente a preferência e atualiza o valor exibido.
 
@@ -140,7 +129,7 @@ flowchart LR
 
 - CT-01: `TrackingSessionEntity` (Room, `app/src/main/java/com/mytracksapp/data/local/entity/TrackingSessionEntity.kt`) recebe um novo campo `locationName: String?` (nulo até uma tentativa de geocodificação bem-sucedida), persistido por RF-01/RF-02.
 - CT-02: `TrackingSessionEntity` recebe um novo campo de distância total persistida (ex.: `distanceMeters: Double`), calculado e gravado em `SessionControllerImpl.stopSession()` (mesmo ponto onde `stoppedTimeMillis`/`movingTimeMillis`/`averageSpeedMetersPerSecond` já são gravados, verified at `SessionControllerImpl.kt:114-122`), satisfazendo RF-13.
-- CT-03: `UserSettings`/`SettingsRepository` (`app/src/main/java/com/mytracksapp/data/settings/SettingsRepository.kt`) recebem 4 novos campos/chaves de preferência, aditivos ao formato existente: precisão de GPS (2 valores), manter-tela-ativa (booleano, padrão `true`), alerta-de-pausa-longa (booleano, padrão `false`) e formato de exportação padrão (2 valores, padrão GPX) — satisfazendo RF-04, RF-06, RF-08, RF-10.
+- CT-03: `UserSettings`/`SettingsRepository` (`app/src/main/java/com/mytracksapp/data/settings/SettingsRepository.kt`) recebem 3 novos campos/chaves de preferência, aditivos ao formato existente: precisão de GPS (2 valores), manter-tela-ativa (booleano, padrão `true`) e formato de exportação padrão (2 valores, padrão GPX) — satisfazendo RF-04, RF-06, RF-10.
 - CT-04: `TrackingSessionDao` (`app/src/main/java/com/mytracksapp/data/local/dao/TrackingSessionDao.kt`) recebe uma operação de exclusão em massa de todas as sessões, apoiada na cascata de FK já existente (`GpsPointEntity`'s `onDelete = ForeignKey.CASCADE`, verified at `GpsPointEntity.kt:31-36`) para também remover todos os pontos GPS, satisfazendo RF-12.
 
 ### Non-Functional Requirements
@@ -173,8 +162,6 @@ flowchart LR
 | RF-05 | Precisão efetivada no `LocationRequest` da próxima sessão | Sim |
 | RF-06 | Manter-tela-ativa persistido, padrão `true` | Sim |
 | RF-07 | Tela não apaga durante sessão ativa quando ativado | Sim |
-| RF-08 | Alerta-de-pausa persistido, padrão `false` | Sim |
-| RF-09 | Alerta de pausa longa disparado após limiar, via mecanismo definido | Não — bloqueado por 2 [NEEDS CLARIFICATION] |
 | RF-10 | Formato de exportação padrão persistido, padrão GPX | Sim |
 | RF-11 | "Exportar" usa formato configurado sem diálogo | Sim |
 | RF-12 | "Limpar histórico" remove todas sessões + pontos, com confirmação | Sim |
@@ -184,7 +171,6 @@ flowchart LR
 | UI-03 | Seta indicando card clicável | Sim |
 | UI-04 | Seletor de precisão de GPS em Configurações | Sim |
 | UI-05 | Switch manter-tela-ativa em Configurações | Sim |
-| UI-06 | Switch alerta-de-pausa-longa em Configurações | Sim |
 | UI-07 | Seletor de formato de exportação padrão em Configurações | Sim |
 | UI-08 | Ação "Limpar histórico" com confirmação obrigatória | Sim |
 | UI-09 | Redesign Organic de Histórico/Configurações, 10 intervalos preservados | Sim |

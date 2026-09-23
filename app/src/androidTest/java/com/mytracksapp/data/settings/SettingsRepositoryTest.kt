@@ -3,6 +3,8 @@ package com.mytracksapp.data.settings
 import androidx.datastore.preferences.preferencesDataStoreFile
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.mytracksapp.domain.export.ExportFormat
+import com.mytracksapp.domain.model.GpsPrecision
 import com.mytracksapp.domain.model.SamplingInterval
 import com.mytracksapp.domain.stats.SegmentClassifier
 import com.mytracksapp.domain.units.DistanceUnit
@@ -51,6 +53,9 @@ class SettingsRepositoryTest {
         assertEquals(DistanceUnit.KM, settings.distanceUnit)
         assertEquals(SegmentClassifier.STOP_RADIUS_METERS, settings.stopRadiusMeters, 0.0)
         assertEquals(SegmentClassifier.STOP_DURATION_MILLIS, settings.stopDurationMillis)
+        assertEquals(GpsPrecision.HIGH_ACCURACY, settings.gpsPrecision)
+        assertEquals(true, settings.keepScreenOnEnabled)
+        assertEquals(ExportFormat.GPX, settings.defaultExportFormat)
     }
 
     @Test
@@ -99,6 +104,33 @@ class SettingsRepositoryTest {
     }
 
     @Test
+    fun setGpsPrecision_persistsAndFlowReEmits() = runBlocking {
+        val repository = repository()
+
+        repository.setGpsPrecision(GpsPrecision.BALANCED)
+
+        assertEquals(GpsPrecision.BALANCED, repository.userSettings.first().gpsPrecision)
+    }
+
+    @Test
+    fun setKeepScreenOnEnabled_persistsAndFlowReEmits() = runBlocking {
+        val repository = repository()
+
+        repository.setKeepScreenOnEnabled(false)
+
+        assertEquals(false, repository.userSettings.first().keepScreenOnEnabled)
+    }
+
+    @Test
+    fun setDefaultExportFormat_persistsAndFlowReEmits() = runBlocking {
+        val repository = repository()
+
+        repository.setDefaultExportFormat(ExportFormat.CSV)
+
+        assertEquals(ExportFormat.CSV, repository.userSettings.first().defaultExportFormat)
+    }
+
+    @Test
     fun valuesSurviveAcrossRepositoryInstances_simulatingAppRestart() = runBlocking {
         val firstInstance = repository()
         firstInstance.setSamplingInterval(SamplingInterval.THIRTY_SECONDS)
@@ -106,6 +138,9 @@ class SettingsRepositoryTest {
         firstInstance.setDistanceUnit(DistanceUnit.NAUTICAL_MILES)
         firstInstance.setStopRadiusMeters(200.0)
         firstInstance.setStopDurationMillis(600_000L)
+        firstInstance.setGpsPrecision(GpsPrecision.BALANCED)
+        firstInstance.setKeepScreenOnEnabled(false)
+        firstInstance.setDefaultExportFormat(ExportFormat.CSV)
 
         // A brand-new SettingsRepository object, backed by the same named DataStore file — this
         // simulates the app process restarting and MainActivity constructing a fresh repository.
@@ -117,6 +152,9 @@ class SettingsRepositoryTest {
         assertEquals(DistanceUnit.NAUTICAL_MILES, restored.distanceUnit)
         assertEquals(200.0, restored.stopRadiusMeters, 0.0001)
         assertEquals(600_000L, restored.stopDurationMillis)
+        assertEquals(GpsPrecision.BALANCED, restored.gpsPrecision)
+        assertEquals(false, restored.keepScreenOnEnabled)
+        assertEquals(ExportFormat.CSV, restored.defaultExportFormat)
     }
 
     @Test

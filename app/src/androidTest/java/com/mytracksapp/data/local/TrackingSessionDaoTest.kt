@@ -95,6 +95,40 @@ class TrackingSessionDaoTest {
     }
 
     @Test
+    fun locationNameAndDistanceMeters_defaultToNullAndZero_whenOmitted() = runBlocking {
+        val sessionId = UUID.randomUUID().toString()
+        sessionDao.insert(
+            TrackingSessionEntity(
+                id = sessionId,
+                samplingIntervalSeconds = 10,
+                startTimestamp = 500L,
+            ),
+        )
+
+        val stored = sessionDao.getSessionById(sessionId).first()!!
+        assertNull(stored.locationName)
+        assertEquals(0.0, stored.distanceMeters, 0.0)
+    }
+
+    @Test
+    fun locationNameAndDistanceMeters_roundTripThroughRoom() = runBlocking {
+        val sessionId = UUID.randomUUID().toString()
+        sessionDao.insert(
+            TrackingSessionEntity(
+                id = sessionId,
+                samplingIntervalSeconds = 10,
+                startTimestamp = 500L,
+                locationName = "Downtown",
+                distanceMeters = 1234.5,
+            ),
+        )
+
+        val stored = sessionDao.getSessionById(sessionId).first()!!
+        assertEquals("Downtown", stored.locationName)
+        assertEquals(1234.5, stored.distanceMeters, 0.0001)
+    }
+
+    @Test
     fun finishingSession_persistsEndMetadata() = runBlocking {
         val sessionId = UUID.randomUUID().toString()
         sessionDao.insert(

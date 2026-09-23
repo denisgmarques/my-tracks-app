@@ -59,7 +59,7 @@ data class HistoryUiState(val sessions: List<HistoryListItem> = emptyList())
  * in-flight (an [SessionStatus.ACTIVE] session doesn't yet have final metadata to show).
  */
 class HistoryViewModel(
-    trackingSessionDao: TrackingSessionDao,
+    private val trackingSessionDao: TrackingSessionDao,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HistoryUiState())
@@ -70,6 +70,17 @@ class HistoryViewModel(
             trackingSessionDao.getSessionsByStatus(SessionStatus.FINISHED).collect { sessions ->
                 _uiState.update { it.copy(sessions = sessions.map { session -> session.toHistoryListItem() }) }
             }
+        }
+    }
+
+    /**
+     * Permanently deletes a session (and, via the DB's cascading foreign key, every GPS point
+     * recorded for it). The caller (the screen) is responsible for confirming with the user
+     * BEFORE calling this — this function itself does not ask again.
+     */
+    fun deleteSession(sessionId: String) {
+        viewModelScope.launch {
+            trackingSessionDao.deleteById(sessionId)
         }
     }
 }

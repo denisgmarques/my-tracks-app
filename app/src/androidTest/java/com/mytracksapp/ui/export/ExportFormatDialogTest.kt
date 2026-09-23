@@ -47,6 +47,7 @@ private class FakeTrackingSessionDao(sessionId: String, status: SessionStatus) :
     override fun getAllSessions(): Flow<List<TrackingSessionEntity>> = flowOf(listOf(session))
     override fun getSessionsByStatus(status: SessionStatus): Flow<List<TrackingSessionEntity>> =
         flowOf(listOf(session).filter { it.status == status })
+    override suspend fun deleteById(sessionId: String) = Unit
 }
 
 /** In-memory [GpsPointDao] double with a couple of fixed points for a session. */

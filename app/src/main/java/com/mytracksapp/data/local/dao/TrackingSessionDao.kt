@@ -26,4 +26,8 @@ interface TrackingSessionDao {
 
     @Query("SELECT * FROM tracking_sessions WHERE status = :status ORDER BY startTimestamp DESC")
     fun getSessionsByStatus(status: SessionStatus): Flow<List<TrackingSessionEntity>>
+
+    /** Cascades to delete every [com.mytracksapp.data.local.entity.GpsPointEntity] of this session too (FK `onDelete = CASCADE`). */
+    @Query("DELETE FROM tracking_sessions WHERE id = :sessionId")
+    suspend fun deleteById(sessionId: String)
 }

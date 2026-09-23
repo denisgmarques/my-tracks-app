@@ -40,6 +40,8 @@ private class FakeTrackingSessionDao : TrackingSessionDao {
 
     override fun getSessionsByStatus(status: SessionStatus): Flow<List<TrackingSessionEntity>> =
         flowOf(sessionsById.values.mapNotNull { it.value }.filter { it.status == status })
+
+    override suspend fun deleteById(sessionId: String) = error("not used in this test")
 }
 
 /** In-memory [GpsPointDao] double — records every inserted point for assertions. */

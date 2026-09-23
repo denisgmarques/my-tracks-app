@@ -6,7 +6,8 @@ import com.mytracksapp.data.local.entity.TrackingSessionEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -17,18 +18,26 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
-/** Fixed-content [TrackingSessionDao] double for [HistoryViewModelTest]. */
-private class FakeTrackingSessionDao(private val allSessions: List<TrackingSessionEntity>) : TrackingSessionDao {
+/** Mutable [TrackingSessionDao] double for [HistoryViewModelTest] — tracks [deletedIds]. */
+private class FakeTrackingSessionDao(initial: List<TrackingSessionEntity>) : TrackingSessionDao {
+    private val state = MutableStateFlow(initial)
+    val deletedIds = mutableListOf<String>()
+
     override suspend fun insert(session: TrackingSessionEntity) = error("not used in this test")
     override suspend fun update(session: TrackingSessionEntity) = error("not used in this test")
 
     override fun getSessionById(sessionId: String): Flow<TrackingSessionEntity?> =
-        flowOf(allSessions.find { it.id == sessionId })
+        state.map { sessions -> sessions.find { it.id == sessionId } }
 
-    override fun getAllSessions(): Flow<List<TrackingSessionEntity>> = flowOf(allSessions)
+    override fun getAllSessions(): Flow<List<TrackingSessionEntity>> = state
 
     override fun getSessionsByStatus(status: SessionStatus): Flow<List<TrackingSessionEntity>> =
-        flowOf(allSessions.filter { it.status == status })
+        state.map { sessions -> sessions.filter { it.status == status } }
+
+    override suspend fun deleteById(sessionId: String) {
+        deletedIds += sessionId
+        state.value = state.value.filterNot { it.id == sessionId }
+    }
 }
 
 /**

@@ -7,12 +7,16 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.swipeRight
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.mytracksapp.data.local.dao.TrackingSessionDao
 import com.mytracksapp.data.local.entity.SessionStatus
 import com.mytracksapp.data.local.entity.TrackingSessionEntity
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -36,23 +40,36 @@ class HistoryListScreenTest {
 
     private val sessionId = "history-click-test-session"
 
-    private val fakeTrackingSessionDao = object : TrackingSessionDao {
-        private val session = TrackingSessionEntity(
-            id = sessionId,
-            samplingIntervalSeconds = 15,
-            // 2024-03-05T00:00:00Z, ends 90s later — deterministic, timezone-independent date.
-            startTimestamp = 1_709_596_800_000L,
-            endTimestamp = 1_709_596_890_000L,
-            status = SessionStatus.FINISHED,
-        )
+    private val session = TrackingSessionEntity(
+        id = sessionId,
+        samplingIntervalSeconds = 15,
+        // 2024-03-05T00:00:00Z, ends 90s later — deterministic, timezone-independent date.
+        startTimestamp = 1_709_596_800_000L,
+        endTimestamp = 1_709_596_890_000L,
+        status = SessionStatus.FINISHED,
+    )
+
+    /** Reactive/mutable so the delete-flow tests can assert the row disappears after confirming. */
+    private class FakeMutableTrackingSessionDao(initial: List<TrackingSessionEntity>) : TrackingSessionDao {
+        private val state = MutableStateFlow(initial)
+        val deletedIds = mutableListOf<String>()
 
         override suspend fun insert(session: TrackingSessionEntity) = Unit
         override suspend fun update(session: TrackingSessionEntity) = Unit
-        override fun getSessionById(sessionId: String): Flow<TrackingSessionEntity?> = flowOf(session)
-        override fun getAllSessions(): Flow<List<TrackingSessionEntity>> = flowOf(listOf(session))
+        override fun getSessionById(sessionId: String): Flow<TrackingSessionEntity?> =
+            state.map { sessions -> sessions.find { it.id == sessionId } }
+
+        override fun getAllSessions(): Flow<List<TrackingSessionEntity>> = state
         override fun getSessionsByStatus(status: SessionStatus): Flow<List<TrackingSessionEntity>> =
-            flowOf(listOf(session))
+            state.map { sessions -> sessions.filter { it.status == status } }
+
+        override suspend fun deleteById(sessionId: String) {
+            deletedIds += sessionId
+            state.value = state.value.filterNot { it.id == sessionId }
+        }
     }
+
+    private val fakeTrackingSessionDao = FakeMutableTrackingSessionDao(listOf(session))
 
     @Test
     fun tappingASessionRowInvokesOnSessionClickWithItsId() {
@@ -90,5 +107,60 @@ class HistoryListScreenTest {
             .assertIsDisplayed()
         composeTestRule.onNodeWithText("Duração: 1:30", useUnmergedTree = true).assertIsDisplayed()
         composeTestRule.onAllNodesWithText(sessionId).assertCountEquals(0)
+    }
+
+    @Test
+    fun swipingLeftThenConfirmingDeletesTheSessionAndRemovesTheRow() {
+        composeTestRule.setContent {
+            HistoryListScreen(
+                viewModel = HistoryViewModel(fakeTrackingSessionDao),
+                onSessionClick = {},
+            )
+        }
+
+        composeTestRule.onNodeWithTag(HistoryListScreenTestTags.item(sessionId))
+            .performTouchInput { swipeLeft() }
+
+        composeTestRule.onNodeWithTag(HistoryListScreenTestTags.DELETE_CONFIRM_DIALOG).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(HistoryListScreenTestTags.DELETE_CONFIRM_BUTTON).performClick()
+
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            fakeTrackingSessionDao.deletedIds.contains(sessionId)
+        }
+        assertEquals(listOf(sessionId), fakeTrackingSessionDao.deletedIds)
+        composeTestRule.onNodeWithTag(HistoryListScreenTestTags.EMPTY_MESSAGE).assertIsDisplayed()
+    }
+
+    @Test
+    fun swipingLeftThenCancellingDoesNotDeleteAndKeepsTheRow() {
+        composeTestRule.setContent {
+            HistoryListScreen(
+                viewModel = HistoryViewModel(fakeTrackingSessionDao),
+                onSessionClick = {},
+            )
+        }
+
+        composeTestRule.onNodeWithTag(HistoryListScreenTestTags.item(sessionId))
+            .performTouchInput { swipeLeft() }
+        composeTestRule.onNodeWithTag(HistoryListScreenTestTags.DELETE_CANCEL_BUTTON).performClick()
+
+        composeTestRule.onNodeWithTag(HistoryListScreenTestTags.item(sessionId)).assertIsDisplayed()
+        assertEquals(emptyList<String>(), fakeTrackingSessionDao.deletedIds)
+    }
+
+    @Test
+    fun swipingRightDoesNothing() {
+        composeTestRule.setContent {
+            HistoryListScreen(
+                viewModel = HistoryViewModel(fakeTrackingSessionDao),
+                onSessionClick = {},
+            )
+        }
+
+        composeTestRule.onNodeWithTag(HistoryListScreenTestTags.item(sessionId))
+            .performTouchInput { swipeRight() }
+
+        composeTestRule.onNodeWithTag(HistoryListScreenTestTags.item(sessionId)).assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("Excluir sessão?").assertCountEquals(0)
     }
 }

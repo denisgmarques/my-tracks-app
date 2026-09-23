@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -72,7 +71,6 @@ fun TrackingScreen(
             .testTag(TrackingScreenTestTags.SCREEN),
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-            Text(text = "Sessão ${uiState.sessionId}", style = MaterialTheme.typography.titleLarge)
             Text(
                 text = "Velocidade instantânea: ${"%.2f".format(
                     SpeedFormatter.toDisplayValue(uiState.instantSpeedMetersPerSecond, uiState.speedUnit),

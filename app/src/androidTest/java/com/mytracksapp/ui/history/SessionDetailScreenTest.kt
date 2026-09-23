@@ -1,7 +1,9 @@
 package com.mytracksapp.ui.history
 
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.datastore.preferences.preferencesDataStoreFile
 import androidx.test.core.app.ApplicationProvider
@@ -27,10 +29,12 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * T10 — instrumented Compose UI test for [SessionDetailScreen] (UI-03): all 6 required metrics
- * (instant speed, average speed, total distance, total elapsed time, stopped time, moving time)
- * are visible simultaneously, with no extra navigation, plus (Phase C follow-up) the session's
- * route and stop-location pins reach the underlying `MapComponent`.
+ * T10 — instrumented Compose UI test for [SessionDetailScreen] (UI-03): all 5 metrics (average
+ * speed, total distance, total elapsed time, stopped time, moving time) are visible
+ * simultaneously, with no extra navigation, the raw session id is never rendered, and instant
+ * speed is intentionally absent (this screen only ever shows a finished session — see
+ * [SessionDetailUiState]'s doc), plus (Phase C follow-up) the session's route and stop-location
+ * pins reach the underlying `MapComponent`.
  *
  * Mirrors `TrackingScreenTest`'s approach for asserting on map content without depending on real
  * Play Services tile rendering: `MapComponent`'s `onPolylineApplied`/`onMarkersApplied` seams
@@ -95,19 +99,19 @@ class SessionDetailScreenTest {
     }
 
     @Test
-    fun allSixUi03MetricsAreVisibleSimultaneouslyWithNoExtraNavigation() {
+    fun allFiveMetricsAreVisibleSimultaneouslyWithNoExtraNavigationAndNoSessionIdOrInstantSpeed() {
         composeTestRule.setContent {
             SessionDetailScreen(
                 viewModel = SessionDetailViewModel(sessionId, fakeTrackingSessionDao, fakeGpsPointDao, settingsRepository()),
             )
         }
 
-        composeTestRule.onNodeWithTag(SessionDetailScreenTestTags.INSTANT_SPEED).assertIsDisplayed()
         composeTestRule.onNodeWithTag(SessionDetailScreenTestTags.AVERAGE_SPEED).assertIsDisplayed()
         composeTestRule.onNodeWithTag(SessionDetailScreenTestTags.TOTAL_DISTANCE).assertIsDisplayed()
         composeTestRule.onNodeWithTag(SessionDetailScreenTestTags.ELAPSED_TIME).assertIsDisplayed()
         composeTestRule.onNodeWithTag(SessionDetailScreenTestTags.STOPPED_TIME).assertIsDisplayed()
         composeTestRule.onNodeWithTag(SessionDetailScreenTestTags.MOVING_TIME).assertIsDisplayed()
+        composeTestRule.onAllNodesWithText(sessionId).assertCountEquals(0)
     }
 
     @Test

@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -45,9 +44,12 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * UI state for [SessionDetailScreen] — the route (for the map) plus the 6 UI-03 metrics for a
- * (typically finished) session: instant speed, average speed, total distance, total elapsed
- * time, stopped time and moving time. [stopLocations] (Phase C follow-up) are the pins
+ * UI state for [SessionDetailScreen] — the route (for the map) plus 5 metrics for a finished
+ * session: average speed, total distance, total elapsed time, stopped time and moving time.
+ * Instant speed is deliberately NOT shown here (unlike the live [com.mytracksapp.ui.tracking.TrackingScreen]):
+ * this screen only ever displays an already-finished session, and "the speed at the last recorded
+ * instant" is not a meaningful thing to highlight for a static, completed trip — average speed and
+ * total distance tell the real story instead. [stopLocations] (Phase C follow-up) are the pins
  * [MapComponent] renders, derived using the CURRENTLY CONFIGURED stop-detection thresholds
  * ([SettingsRepository]), not RF-06's hardcoded defaults, so reviewing an old session reflects
  * today's settings.
@@ -62,7 +64,6 @@ data class SessionDetailUiState(
     val samplingIntervalSeconds: Int = 0,
     val status: SessionStatus = SessionStatus.ACTIVE,
     val polyline: List<TrackingPolylinePoint> = emptyList(),
-    val instantSpeedMetersPerSecond: Double = 0.0,
     val averageSpeedMetersPerSecond: Double = 0.0,
     val totalDistanceMeters: Double = 0.0,
     val elapsedTimeMillis: Long = 0L,
@@ -78,15 +79,10 @@ data class SessionDetailUiState(
 }
 
 /**
- * Backs [SessionDetailScreen] (T10): recomputes the UI-03 metrics for [sessionId] directly
- * from its persisted points, via [StatsEngine]/[SegmentClassifier] — the same engines
- * `TrackingViewModel` uses for an active session — so the detail screen's numbers are always
- * derived the same way regardless of whether the session is still active or already finished.
- *
- * - `instantSpeedMetersPerSecond` = the instant speed of the session's LAST recorded interval
- *   (i.e. [StatsEngine.instantSpeeds] `.lastOrNull()`), since a finished/static session has no
- *   "current" GPS fix — the most recent one it ever had is the closest analogue. `0.0` for a
- *   single-point session (no interval exists yet).
+ * Backs [SessionDetailScreen] (T10): recomputes the finished-session metrics for [sessionId]
+ * directly from its persisted points, via [StatsEngine]/[SegmentClassifier] — the same engines
+ * `TrackingViewModel` uses for an active session — so the numbers are always derived the same way;
+ * this screen just doesn't surface instant speed (see [SessionDetailUiState]'s doc for why).
  *
  * Phase C follow-up: also combines [settingsRepository]'s `Flow<UserSettings>` so (a) the
  * exposed display units stay live if the user changes them while viewing this screen, and (b)
@@ -125,7 +121,6 @@ class SessionDetailViewModel(
                             polyline = points.map { point ->
                                 TrackingPolylinePoint(latitude = point.latitude, longitude = point.longitude)
                             },
-                            instantSpeedMetersPerSecond = StatsEngine.instantSpeeds(points).lastOrNull() ?: 0.0,
                             averageSpeedMetersPerSecond = StatsEngine.averageSpeedMetersPerSecond(points),
                             totalDistanceMeters = StatsEngine.totalDistanceMeters(points),
                             elapsedTimeMillis = StatsEngine.elapsedTimeMillis(points),
@@ -145,7 +140,6 @@ class SessionDetailViewModel(
 /** Stable test tags for [SessionDetailScreen], used by SessionDetailScreenTest (UI-03) and ExportFormatDialogTest (UI-05). */
 object SessionDetailScreenTestTags {
     const val SCREEN = "session_detail_screen"
-    const val INSTANT_SPEED = "session_detail_instant_speed"
     const val AVERAGE_SPEED = "session_detail_average_speed"
     const val TOTAL_DISTANCE = "session_detail_total_distance"
     const val ELAPSED_TIME = "session_detail_elapsed_time"
@@ -158,9 +152,10 @@ object SessionDetailScreenTestTags {
 private const val STOP_MARKER_TITLE = "Parada"
 
 /**
- * Finished-session detail screen (T10, UI-03): displays all 6 required metrics — instant speed,
- * average speed, total distance, total elapsed time, stopped time, moving time — simultaneously,
- * with no further navigation needed to see any of them, plus (Phase C follow-up) the session's
+ * Finished-session detail screen (T10, UI-03): displays 5 metrics — average speed, total
+ * distance, total elapsed time, stopped time, moving time (no instant speed, no session id — see
+ * [SessionDetailUiState]'s doc) — simultaneously, with no further navigation needed to see any of
+ * them, plus (Phase C follow-up) the session's
  * route and stop-location pins on a [MapComponent], mirroring
  * [com.mytracksapp.ui.tracking.TrackingScreen]'s live layout but for a static, already-recorded
  * route — no camera-follow logic is needed here beyond [MapComponent]'s existing bounds-fit,
@@ -193,13 +188,6 @@ fun SessionDetailScreen(
             .testTag(SessionDetailScreenTestTags.SCREEN),
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-            Text(text = "Sessão ${uiState.sessionId}", style = MaterialTheme.typography.titleLarge)
-            Text(
-                text = "Velocidade instantânea: ${"%.2f".format(
-                    SpeedFormatter.toDisplayValue(uiState.instantSpeedMetersPerSecond, uiState.speedUnit),
-                )} ${uiState.speedUnit.displaySuffix}",
-                modifier = Modifier.testTag(SessionDetailScreenTestTags.INSTANT_SPEED),
-            )
             Text(
                 text = "Velocidade média: ${"%.2f".format(
                     SpeedFormatter.toDisplayValue(uiState.averageSpeedMetersPerSecond, uiState.speedUnit),

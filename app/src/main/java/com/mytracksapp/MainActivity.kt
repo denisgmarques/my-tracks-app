@@ -8,6 +8,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import com.mytracksapp.data.local.AppDatabase
+import com.mytracksapp.data.settings.SettingsRepository
 import com.mytracksapp.domain.export.ExportService
 import com.mytracksapp.domain.session.SessionControllerImpl
 import com.mytracksapp.permission.LocationPermissionManager
@@ -46,6 +47,7 @@ class MainActivity : ComponentActivity() {
             isBackgroundLocationGranted = permissionManager::isBackgroundLocationGranted,
         )
         val exportService = ExportService(trackingSessionDao, gpsPointDao)
+        val settingsRepository = SettingsRepository(applicationContext)
 
         setContent {
             MaterialTheme {
@@ -56,6 +58,7 @@ class MainActivity : ComponentActivity() {
                         sessionController = sessionController,
                         permissionManager = permissionManager,
                         exportService = exportService,
+                        settingsRepository = settingsRepository,
                     )
                 }
             }

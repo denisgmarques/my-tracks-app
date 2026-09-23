@@ -1,0 +1,129 @@
+package com.mytracksapp.ui.settings
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.mytracksapp.data.settings.SettingsRepository
+import com.mytracksapp.data.settings.UserSettings
+import com.mytracksapp.domain.model.SamplingInterval
+import com.mytracksapp.domain.units.DistanceUnit
+import com.mytracksapp.domain.units.SpeedUnit
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+
+/** Error message shown when the stop-radius field does not parse to a positive number. */
+const val STOP_RADIUS_INVALID_MESSAGE = "Informe um valor numérico positivo para o raio de parada."
+
+/** Error message shown when the stop-duration field does not parse to a positive number. */
+const val STOP_DURATION_INVALID_MESSAGE = "Informe um valor numérico positivo para a duração da parada."
+
+private const val MILLIS_PER_MINUTE = 60_000L
+
+/** Formats a [Double] without a trailing ".0" for whole numbers, otherwise as-is. */
+private fun formatNumber(value: Double): String =
+    if (value == value.toLong().toDouble()) value.toLong().toString() else value.toString()
+
+private fun millisToMinutesText(millis: Long): String = formatNumber(millis / MILLIS_PER_MINUTE.toDouble())
+
+/**
+ * UI state for [SettingsScreen].
+ *
+ * The enum-backed fields ([samplingInterval], [speedUnit], [distanceUnit]) always mirror
+ * [SettingsRepository]'s persisted values exactly, since selecting one of their fixed options
+ * persists immediately (no local-only draft state for these). The two numeric fields keep their
+ * own draft text ([stopRadiusMetersText]/[stopDurationMinutesText]) so the user can type freely;
+ * they are only validated and persisted on commit (Done/focus-loss), not on every keystroke —
+ * otherwise every partially-typed keystroke (e.g. an empty field while replacing a value) would
+ * either persist garbage or need to silently reject input mid-typing.
+ */
+data class SettingsUiState(
+    val samplingInterval: SamplingInterval = UserSettings().samplingInterval,
+    val speedUnit: SpeedUnit = UserSettings().speedUnit,
+    val distanceUnit: DistanceUnit = UserSettings().distanceUnit,
+    val stopRadiusMetersText: String = formatNumber(UserSettings().stopRadiusMeters),
+    val stopRadiusError: String? = null,
+    val stopDurationMinutesText: String = millisToMinutesText(UserSettings().stopDurationMillis),
+    val stopDurationError: String? = null,
+)
+
+/**
+ * Backs [SettingsScreen] (follow-up phase): reads and writes [SettingsRepository] directly.
+ *
+ * The stop-duration control is exposed to the user in **minutes**, not seconds/millis — the
+ * default (300_000ms = 5 minutes) reads far more naturally as "5 minutes" than "300 seconds", and
+ * a stop is by definition a multi-minute affair, so minute granularity loses nothing meaningful.
+ * [SettingsRepository] itself is unaffected: this ViewModel converts to/from millis at the
+ * boundary ([onStopDurationCommit]/[millisToMinutesText]) and the repository keeps storing millis.
+ */
+class SettingsViewModel(
+    private val settingsRepository: SettingsRepository,
+) : ViewModel() {
+
+    private val _uiState = MutableStateFlow(SettingsUiState())
+    val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            settingsRepository.userSettings.collect { settings ->
+                _uiState.update {
+                    it.copy(
+                        samplingInterval = settings.samplingInterval,
+                        speedUnit = settings.speedUnit,
+                        distanceUnit = settings.distanceUnit,
+                        stopRadiusMetersText = formatNumber(settings.stopRadiusMeters),
+                        stopRadiusError = null,
+                        stopDurationMinutesText = millisToMinutesText(settings.stopDurationMillis),
+                        stopDurationError = null,
+                    )
+                }
+            }
+        }
+    }
+
+    fun onSamplingIntervalSelected(interval: SamplingInterval) {
+        viewModelScope.launch { settingsRepository.setSamplingInterval(interval) }
+    }
+
+    fun onSpeedUnitSelected(unit: SpeedUnit) {
+        viewModelScope.launch { settingsRepository.setSpeedUnit(unit) }
+    }
+
+    fun onDistanceUnitSelected(unit: DistanceUnit) {
+        viewModelScope.launch { settingsRepository.setDistanceUnit(unit) }
+    }
+
+    /** Updates the stop-radius draft text only; nothing is persisted until [onStopRadiusCommit]. */
+    fun onStopRadiusTextChanged(text: String) {
+        _uiState.update { it.copy(stopRadiusMetersText = text, stopRadiusError = null) }
+    }
+
+    /** Validates and persists the current stop-radius draft text (Done action / focus loss). */
+    fun onStopRadiusCommit() {
+        val meters = _uiState.value.stopRadiusMetersText.toDoubleOrNull()
+        if (meters == null || meters <= 0.0) {
+            _uiState.update { it.copy(stopRadiusError = STOP_RADIUS_INVALID_MESSAGE) }
+            return
+        }
+        _uiState.update { it.copy(stopRadiusError = null) }
+        viewModelScope.launch { settingsRepository.setStopRadiusMeters(meters) }
+    }
+
+    /** Updates the stop-duration draft text only; nothing is persisted until [onStopDurationCommit]. */
+    fun onStopDurationTextChanged(text: String) {
+        _uiState.update { it.copy(stopDurationMinutesText = text, stopDurationError = null) }
+    }
+
+    /** Validates and persists the current stop-duration draft text (Done action / focus loss). */
+    fun onStopDurationCommit() {
+        val minutes = _uiState.value.stopDurationMinutesText.toDoubleOrNull()
+        if (minutes == null || minutes <= 0.0) {
+            _uiState.update { it.copy(stopDurationError = STOP_DURATION_INVALID_MESSAGE) }
+            return
+        }
+        _uiState.update { it.copy(stopDurationError = null) }
+        val millis = (minutes * MILLIS_PER_MINUTE).toLong()
+        viewModelScope.launch { settingsRepository.setStopDurationMillis(millis) }
+    }
+}

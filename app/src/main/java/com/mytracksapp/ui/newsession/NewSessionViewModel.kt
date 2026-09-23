@@ -2,6 +2,7 @@ package com.mytracksapp.ui.newsession
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.mytracksapp.data.settings.SettingsRepository
 import com.mytracksapp.domain.model.SamplingInterval
 import com.mytracksapp.domain.session.SessionController
 import com.mytracksapp.domain.session.SessionStartOutcome
@@ -9,6 +10,7 @@ import com.mytracksapp.permission.LocationPermissionManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -19,41 +21,48 @@ const val BACKGROUND_LOCATION_PERMISSION_REQUIRED_MESSAGE =
 /**
  * UI state for [NewSessionScreen].
  *
- * [availableIntervals] is always the full, fixed set of [SamplingInterval] values (RF-01/UI-01)
- * — there is no code path that can narrow or extend this list at runtime.
+ * Follow-up phase: [configuredInterval] is now a read-only reflection of whatever
+ * [SettingsRepository] currently holds — Settings owns the sampling interval exclusively, this
+ * screen no longer lets the user pick one per session (that picker moved to `SettingsScreen`).
  */
 data class NewSessionUiState(
-    val availableIntervals: List<SamplingInterval> = SamplingInterval.entries,
-    val selectedInterval: SamplingInterval = SamplingInterval.entries.first(),
+    val configuredInterval: SamplingInterval = SamplingInterval.ONE_SECOND,
     val isStarting: Boolean = false,
     val permissionDeniedMessage: String? = null,
     val startedSessionId: String? = null,
 )
 
 /**
- * Backs [NewSessionScreen] (T04): holds the user's [SamplingInterval] selection and, on confirm,
- * verifies background location permission (RF-03) BEFORE delegating to [SessionController]
- * (RF-01) — the permission gate happens here, not as an afterthought inside the controller call.
+ * Backs [NewSessionScreen]: verifies background location permission (RF-03) before delegating to
+ * [SessionController] (RF-01), and reads the sampling interval to use from [settingsRepository]
+ * rather than from any local selection.
  *
- * [sessionController] is Phase 4's `SessionController` interface (T05 implements it); this
- * ViewModel is written entirely against that contract so it does not need to change when T05
- * lands.
+ * [configuredInterval] shown in [uiState] is kept live (via collecting
+ * [SettingsRepository.userSettings]) purely for display. The actual value passed to
+ * [SessionController.startSession] on [onConfirm] is re-read fresh from [settingsRepository] at
+ * that exact moment (not the possibly-stale value cached in [uiState]), so a setting changed on
+ * the Settings screen takes effect on the very next session start even if this screen was already
+ * composed before that change happened.
  */
 class NewSessionViewModel(
     private val permissionManager: LocationPermissionManager,
     private val sessionController: SessionController,
+    private val settingsRepository: SettingsRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(NewSessionUiState())
     val uiState: StateFlow<NewSessionUiState> = _uiState.asStateFlow()
 
-    /** Updates the selected interval. [interval] is always one of the valid enum members. */
-    fun onIntervalSelected(interval: SamplingInterval) {
-        _uiState.update { it.copy(selectedInterval = interval, permissionDeniedMessage = null) }
+    init {
+        viewModelScope.launch {
+            settingsRepository.userSettings.collect { settings ->
+                _uiState.update { it.copy(configuredInterval = settings.samplingInterval) }
+            }
+        }
     }
 
     /**
-     * Confirms the current selection and attempts to start a session.
+     * Confirms starting a session with the currently configured interval.
      *
      * Per RF-03, permission is verified here first: if background location is not granted, no
      * call to [SessionController.startSession] is made at all, and a message is surfaced instead.
@@ -66,10 +75,10 @@ class NewSessionViewModel(
             return
         }
 
-        val interval = _uiState.value.selectedInterval
         _uiState.update { it.copy(isStarting = true, permissionDeniedMessage = null) }
 
         viewModelScope.launch {
+            val interval = settingsRepository.userSettings.first().samplingInterval
             when (val outcome = sessionController.startSession(interval)) {
                 is SessionStartOutcome.Started -> _uiState.update {
                     it.copy(isStarting = false, startedSessionId = outcome.sessionId)

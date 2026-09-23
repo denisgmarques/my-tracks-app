@@ -4,11 +4,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.mytracksapp.data.local.dao.GpsPointDao
 import com.mytracksapp.data.local.dao.TrackingSessionDao
+import com.mytracksapp.data.settings.SettingsRepository
 import com.mytracksapp.domain.session.SessionController
 import com.mytracksapp.permission.LocationPermissionManager
 import com.mytracksapp.ui.history.HistoryViewModel
 import com.mytracksapp.ui.history.SessionDetailViewModel
 import com.mytracksapp.ui.newsession.NewSessionViewModel
+import com.mytracksapp.ui.settings.SettingsViewModel
 import com.mytracksapp.ui.tracking.TrackingViewModel
 
 /**
@@ -21,13 +23,27 @@ import com.mytracksapp.ui.tracking.TrackingViewModel
 class NewSessionViewModelFactory(
     private val permissionManager: LocationPermissionManager,
     private val sessionController: SessionController,
+    private val settingsRepository: SettingsRepository,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         require(modelClass.isAssignableFrom(NewSessionViewModel::class.java)) {
             "Unknown ViewModel class $modelClass"
         }
-        return NewSessionViewModel(permissionManager, sessionController) as T
+        return NewSessionViewModel(permissionManager, sessionController, settingsRepository) as T
+    }
+}
+
+/** [SettingsViewModel] has a single dependency, [SettingsRepository], per this codebase's convention. */
+class SettingsViewModelFactory(
+    private val settingsRepository: SettingsRepository,
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        require(modelClass.isAssignableFrom(SettingsViewModel::class.java)) {
+            "Unknown ViewModel class $modelClass"
+        }
+        return SettingsViewModel(settingsRepository) as T
     }
 }
 

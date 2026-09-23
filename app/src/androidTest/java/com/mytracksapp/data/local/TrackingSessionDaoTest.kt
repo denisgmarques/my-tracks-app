@@ -158,4 +158,87 @@ class TrackingSessionDaoTest {
         assertEquals(40_000L, stored.movingTimeMillis)
         assertEquals(1.5, stored.averageSpeedMetersPerSecond, 0.0001)
     }
+
+    /**
+     * T02 (RF-12, RNF-03, CT-04) — [TrackingSessionDao.deleteAll] empties `tracking_sessions`
+     * AND, through the existing FK `onDelete = CASCADE` on
+     * [com.mytracksapp.data.local.entity.GpsPointEntity], `gps_points` too — for every session,
+     * not just one.
+     */
+    @Test
+    fun deleteAll_withNSessionsAndMPointsEach_emptiesBothTables() = runBlocking {
+        val sessionCount = 3
+        val pointsPerSession = 4
+        val sessionIds = (0 until sessionCount).map { UUID.randomUUID().toString() }
+
+        sessionIds.forEachIndexed { sessionIndex, sessionId ->
+            sessionDao.insert(
+                TrackingSessionEntity(
+                    id = sessionId,
+                    samplingIntervalSeconds = 10,
+                    startTimestamp = 1_000L * sessionIndex,
+                ),
+            )
+            pointDao.insertAll(
+                (0 until pointsPerSession).map { pointIndex ->
+                    GpsPointEntity(
+                        sessionId = sessionId,
+                        timestamp = 1_000L * sessionIndex + pointIndex * 10_000L,
+                        latitude = 0.0,
+                        longitude = 0.0,
+                        accuracy = 5f,
+                    )
+                },
+            )
+        }
+
+        // Sanity check: everything was actually persisted before wiping it.
+        assertEquals(sessionCount, sessionDao.getAllSessions().first().size)
+        sessionIds.forEach { sessionId ->
+            assertEquals(pointsPerSession, pointDao.countForSession(sessionId))
+        }
+
+        sessionDao.deleteAll()
+
+        assertEquals(0, sessionDao.getAllSessions().first().size)
+        sessionIds.forEach { sessionId ->
+            assertEquals(0, pointDao.countForSession(sessionId))
+        }
+    }
+
+    /**
+     * T02 — [TrackingSessionDao.updateLocationName] touches only the `locationName` column,
+     * leaving every other field of the row exactly as it was (isolation from
+     * [TrackingSessionDao.update]'s whole-row write).
+     */
+    @Test
+    fun updateLocationName_changesOnlyThatColumn() = runBlocking {
+        val sessionId = UUID.randomUUID().toString()
+        val original = TrackingSessionEntity(
+            id = sessionId,
+            samplingIntervalSeconds = 20,
+            startTimestamp = 5_000L,
+            endTimestamp = 65_000L,
+            status = SessionStatus.FINISHED,
+            stoppedTimeMillis = 10_000L,
+            movingTimeMillis = 50_000L,
+            averageSpeedMetersPerSecond = 2.5,
+            distanceMeters = 987.6,
+            locationName = null,
+        )
+        sessionDao.insert(original)
+
+        sessionDao.updateLocationName(sessionId, "Riverside Park")
+
+        val stored = sessionDao.getSessionById(sessionId).first()!!
+        assertEquals("Riverside Park", stored.locationName)
+        assertEquals(original.samplingIntervalSeconds, stored.samplingIntervalSeconds)
+        assertEquals(original.startTimestamp, stored.startTimestamp)
+        assertEquals(original.endTimestamp, stored.endTimestamp)
+        assertEquals(original.status, stored.status)
+        assertEquals(original.stoppedTimeMillis, stored.stoppedTimeMillis)
+        assertEquals(original.movingTimeMillis, stored.movingTimeMillis)
+        assertEquals(original.averageSpeedMetersPerSecond, stored.averageSpeedMetersPerSecond, 0.0001)
+        assertEquals(original.distanceMeters, stored.distanceMeters, 0.0001)
+    }
 }

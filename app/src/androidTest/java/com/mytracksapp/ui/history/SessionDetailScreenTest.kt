@@ -84,6 +84,8 @@ class SessionDetailScreenTest {
         override fun getSessionsByStatus(status: SessionStatus): Flow<List<TrackingSessionEntity>> =
             flowOf(listOf(session))
         override suspend fun deleteById(sessionId: String) = Unit
+        override suspend fun deleteAll() = Unit
+        override suspend fun updateLocationName(sessionId: String, locationName: String?) = Unit
     }
 
     private val fakeGpsPointDao = object : GpsPointDao {
@@ -184,6 +186,8 @@ class SessionDetailScreenTest {
             override fun getSessionsByStatus(status: SessionStatus): Flow<List<TrackingSessionEntity>> =
                 flowOf(listOf(session))
             override suspend fun deleteById(sessionId: String) = Unit
+            override suspend fun deleteAll() = Unit
+            override suspend fun updateLocationName(sessionId: String, locationName: String?) = Unit
         }
 
         val repository = settingsRepository()

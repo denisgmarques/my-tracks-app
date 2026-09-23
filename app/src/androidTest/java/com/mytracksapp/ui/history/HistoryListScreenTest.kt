@@ -67,6 +67,16 @@ class HistoryListScreenTest {
             deletedIds += sessionId
             state.value = state.value.filterNot { it.id == sessionId }
         }
+
+        override suspend fun deleteAll() {
+            state.value = emptyList()
+        }
+
+        override suspend fun updateLocationName(sessionId: String, locationName: String?) {
+            state.value = state.value.map { session ->
+                if (session.id == sessionId) session.copy(locationName = locationName) else session
+            }
+        }
     }
 
     private val fakeTrackingSessionDao = FakeMutableTrackingSessionDao(listOf(session))

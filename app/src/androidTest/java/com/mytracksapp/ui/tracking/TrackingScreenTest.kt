@@ -1,5 +1,9 @@
 package com.mytracksapp.ui.tracking
 
+import android.view.View
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -17,6 +21,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -181,5 +187,51 @@ class TrackingScreenTest {
         assertEquals(3, state.polyline.size)
         assertEquals(10.002, state.polyline.last().latitude, 0.0)
         assertEquals(LatLng(10.002, 20.0), appliedPolylines.last().last())
+    }
+
+    /**
+     * T09 (RF-07, RNF-04) — the composed [View]'s `keepScreenOn` flag tracks
+     * `TrackingUiState.keepScreenOnEnabled` (itself sourced from [SettingsRepository]) while
+     * [TrackingScreen] is in composition, and is always reset to `false` once the screen leaves
+     * composition — regardless of the preference's last value.
+     */
+    @Test
+    fun keepScreenOnTracksThePreferenceWhileComposedAndIsResetOnDispose() {
+        val sessionId = "tracking-screen-test-keep-screen-on"
+        val repository = settingsRepository()
+        runBlocking { repository.setKeepScreenOnEnabled(true) }
+        val viewModel = TrackingViewModel(sessionId, FakeGpsPointDao(), repository)
+        val appliedViews = Collections.synchronizedList(mutableListOf<View>())
+        var showScreen by mutableStateOf(true)
+
+        composeTestRule.setContent {
+            if (showScreen) {
+                TrackingScreen(
+                    viewModel = viewModel,
+                    onKeepScreenOnApplied = { appliedViews.add(it) },
+                )
+            }
+        }
+
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            appliedViews.isNotEmpty() && appliedViews.last().keepScreenOn
+        }
+        assertTrue(appliedViews.last().keepScreenOn)
+
+        // Disabling the preference while the screen stays composed turns it back off.
+        runBlocking { repository.setKeepScreenOnEnabled(false) }
+        composeTestRule.waitUntil(timeoutMillis = 5_000) { !appliedViews.last().keepScreenOn }
+        assertFalse(appliedViews.last().keepScreenOn)
+
+        // Re-enabling it while still composed turns it back on.
+        runBlocking { repository.setKeepScreenOnEnabled(true) }
+        composeTestRule.waitUntil(timeoutMillis = 5_000) { appliedViews.last().keepScreenOn }
+        assertTrue(appliedViews.last().keepScreenOn)
+
+        // Leaving the screen (composition disposed) always resets the flag to false, even though
+        // the preference itself is still enabled.
+        showScreen = false
+        composeTestRule.waitForIdle()
+        assertFalse(appliedViews.last().keepScreenOn)
     }
 }

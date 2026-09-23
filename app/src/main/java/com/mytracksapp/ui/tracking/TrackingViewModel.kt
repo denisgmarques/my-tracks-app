@@ -50,6 +50,7 @@ data class TrackingUiState(
     val movingTimeMillis: Long = 0L,
     val speedUnit: SpeedUnit = SpeedUnit.KMH,
     val distanceUnit: DistanceUnit = DistanceUnit.KM,
+    val keepScreenOnEnabled: Boolean = true,
 )
 
 /**
@@ -105,6 +106,7 @@ class TrackingViewModel(
                             movingTimeMillis = classification.movingTimeMillis,
                             speedUnit = settings.speedUnit,
                             distanceUnit = settings.distanceUnit,
+                            keepScreenOnEnabled = settings.keepScreenOnEnabled,
                         )
                     }
                 }

@@ -42,6 +42,8 @@ private class FakeTrackingSessionDao : TrackingSessionDao {
         flowOf(sessionsById.values.mapNotNull { it.value }.filter { it.status == status })
 
     override suspend fun deleteById(sessionId: String) = error("not used in this test")
+    override suspend fun deleteAll() = error("not used in this test")
+    override suspend fun updateLocationName(sessionId: String, locationName: String?) = error("not used in this test")
 }
 
 /** In-memory [GpsPointDao] double — records every inserted point for assertions. */

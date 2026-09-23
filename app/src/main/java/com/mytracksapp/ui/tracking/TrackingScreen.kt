@@ -33,6 +33,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -45,6 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -141,12 +143,31 @@ fun TrackingScreen(
     onPolylineApplied: (List<LatLng>) -> Unit = {},
     onFinishSession: suspend (String) -> Unit = {},
     onExportClick: () -> Unit = {},
+    onKeepScreenOnApplied: (android.view.View) -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var isFinishing by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
     var mapExpanded by rememberSaveable { mutableStateOf(false) }
+
+    // T09 (RF-07, RNF-04) — keeps the device screen on for exactly as long as this screen is
+    // composed AND the preference is enabled, scoped to this composable's own View via LocalView
+    // so no other screen (Histórico, Configurações, SessionDetailScreen) is ever affected.
+    // Resetting to false in onDispose covers both leaving this screen and the preference flipping
+    // off mid-session (the key recomposes the effect either way). [onKeepScreenOnApplied] is an
+    // optional test seam (mirrors [onPolylineApplied]/[onExportClick] above) letting instrumented
+    // tests observe the exact View instance this effect toggled, without depending on
+    // Compose-internal test APIs; production callers never set it.
+    val view = LocalView.current
+    DisposableEffect(uiState.keepScreenOnEnabled) {
+        view.keepScreenOn = uiState.keepScreenOnEnabled
+        onKeepScreenOnApplied(view)
+        onDispose {
+            view.keepScreenOn = false
+            onKeepScreenOnApplied(view)
+        }
+    }
     val mapHeight by animateDpAsState(
         targetValue = if (mapExpanded) MapExpandedHeight else MapCollapsedHeight,
         animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing),

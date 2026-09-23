@@ -231,4 +231,25 @@ class TrackingViewModelTest {
             state = awaitState(viewModel) { it.speedUnit == SpeedUnit.MS }
             assertEquals(DistanceUnit.MILES, state.distanceUnit)
         }
+
+    @Test
+    fun `uiState reflects the currently configured keepScreenOnEnabled, and reacts to changes`() =
+        runBlocking {
+            val sessionId = "session-keep-screen-on"
+            val dao = FakeGpsPointDao()
+            val repository = settingsRepository()
+            repository.setKeepScreenOnEnabled(false)
+
+            val viewModel = TrackingViewModel(sessionId = sessionId, gpsPointDao = dao, settingsRepository = repository)
+
+            var state = awaitState(viewModel) { !it.keepScreenOnEnabled }
+            assertEquals(false, state.keepScreenOnEnabled)
+
+            // Changing settings while the "session" is active must be reflected reactively,
+            // without recreating the ViewModel.
+            repository.setKeepScreenOnEnabled(true)
+
+            state = awaitState(viewModel) { it.keepScreenOnEnabled }
+            assertEquals(true, state.keepScreenOnEnabled)
+        }
 }

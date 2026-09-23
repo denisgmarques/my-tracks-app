@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import com.mytracksapp.data.local.entity.SessionStatus
 import com.mytracksapp.data.local.entity.TrackingSessionEntity
@@ -30,4 +31,22 @@ interface TrackingSessionDao {
     /** Cascades to delete every [com.mytracksapp.data.local.entity.GpsPointEntity] of this session too (FK `onDelete = CASCADE`). */
     @Query("DELETE FROM tracking_sessions WHERE id = :sessionId")
     suspend fun deleteById(sessionId: String)
+
+    /**
+     * T02 (RF-12, RNF-03) — removes every session, cascading (FK `onDelete = CASCADE`) to remove
+     * every [com.mytracksapp.data.local.entity.GpsPointEntity] as well. `@Transaction` guarantees
+     * this is all-or-nothing.
+     */
+    @Transaction
+    @Query("DELETE FROM tracking_sessions")
+    suspend fun deleteAll()
+
+    /**
+     * T02 — updates only the `locationName` column, leaving every other field of the row
+     * untouched. Used by [com.mytracksapp.domain.geocoding.FirstPointGeocodingCoordinator] so a
+     * background geocoding result never races with [update]'s whole-row write from
+     * `SessionControllerImpl.stopSession`.
+     */
+    @Query("UPDATE tracking_sessions SET locationName = :locationName WHERE id = :sessionId")
+    suspend fun updateLocationName(sessionId: String, locationName: String?)
 }

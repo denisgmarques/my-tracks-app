@@ -47,7 +47,7 @@ class NewSessionViewModel(
     private val _uiState = MutableStateFlow(NewSessionUiState())
     val uiState: StateFlow<NewSessionUiState> = _uiState.asStateFlow()
 
-    /** Updates the selected interval. [interval] is always one of the 9 valid enum members. */
+    /** Updates the selected interval. [interval] is always one of the valid enum members. */
     fun onIntervalSelected(interval: SamplingInterval) {
         _uiState.update { it.copy(selectedInterval = interval, permissionDeniedMessage = null) }
     }

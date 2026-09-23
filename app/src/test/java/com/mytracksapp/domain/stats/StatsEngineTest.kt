@@ -132,6 +132,27 @@ class StatsEngineTest {
     }
 
     @Test
+    fun `totalDistanceMeters sums Haversine distance across all consecutive pairs in the session`() {
+        val p0 = point("s1", 0L, 0.0, 0.0)
+        val p1 = point("s1", 10_000L, 0.001, 0.0)
+        val p2 = point("s1", 25_000L, 0.002, 0.0)
+        val p3 = point("s1", 40_000L, 0.0025, 0.001)
+        val points = listOf(p0, p1, p2, p3)
+
+        val expectedTotal = referenceHaversineMeters(p0.latitude, p0.longitude, p1.latitude, p1.longitude) +
+            referenceHaversineMeters(p1.latitude, p1.longitude, p2.latitude, p2.longitude) +
+            referenceHaversineMeters(p2.latitude, p2.longitude, p3.latitude, p3.longitude)
+
+        assertEquals(expectedTotal, StatsEngine.totalDistanceMeters(points), 0.001)
+    }
+
+    @Test
+    fun `totalDistanceMeters is zero for fewer than two points`() {
+        assertEquals(0.0, StatsEngine.totalDistanceMeters(emptyList()), 0.0)
+        assertEquals(0.0, StatsEngine.totalDistanceMeters(listOf(point("s1", 0L, 0.0, 0.0))), 0.0)
+    }
+
+    @Test
     fun `averageSpeedMetersPerSecond equals total distance over total elapsed time`() {
         val p0 = point("s1", 0L, 0.0, 0.0)
         val p1 = point("s1", 10_000L, 0.001, 0.0)

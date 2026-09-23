@@ -36,10 +36,10 @@ object NewSessionScreenTestTags {
 }
 
 /**
- * New session screen (T04): presents the 9 fixed [SamplingInterval] values as selectable options
+ * New session screen (T04): presents the fixed set of [SamplingInterval] values as selectable options
  * (UI-01) — deliberately, there is no [androidx.compose.material3.TextField] or any other free
  * numeric/text input anywhere on this screen for the interval; the only way to pick a value is by
- * selecting one of the 9 rendered [RadioButton] options, each bound to a [SamplingInterval] enum
+ * selecting one of the rendered [RadioButton] options, each bound to a [SamplingInterval] enum
  * member.
  */
 @Composable

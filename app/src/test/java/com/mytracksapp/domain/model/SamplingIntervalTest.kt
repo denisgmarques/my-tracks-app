@@ -5,26 +5,27 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * T04 — verifies [SamplingInterval] represents EXACTLY the 9 values RF-01/UI-01 allow, no more
- * and no fewer (RF-01 AC: "qualquer valor fora do conjunto é rejeitado").
+ * T04 — verifies [SamplingInterval] represents EXACTLY the 10 values RF-01/UI-01 (plus the
+ * `ONE_SECOND` follow-up phase addition) allow, no more and no fewer (RF-01 AC: "qualquer valor
+ * fora do conjunto é rejeitado").
  */
 class SamplingIntervalTest {
 
     @Test
-    fun `exactly nine members exist`() {
-        assertEquals(9, SamplingInterval.entries.size)
+    fun `exactly ten members exist`() {
+        assertEquals(10, SamplingInterval.entries.size)
     }
 
     @Test
-    fun `member seconds values are exactly the RF-01 allowed set`() {
-        val expected = setOf(3, 5, 10, 15, 30, 45, 60, 120, 180)
+    fun `member seconds values are exactly the allowed set`() {
+        val expected = setOf(1, 3, 5, 10, 15, 30, 45, 60, 120, 180)
         val actual = SamplingInterval.entries.map { it.seconds }.toSet()
         assertEquals(expected, actual)
     }
 
     @Test
-    fun `ALLOWED_SECONDS matches the RF-01 set exactly`() {
-        val expected = setOf(3, 5, 10, 15, 30, 45, 60, 120, 180)
+    fun `ALLOWED_SECONDS matches the allowed set exactly`() {
+        val expected = setOf(1, 3, 5, 10, 15, 30, 45, 60, 120, 180)
         assertEquals(expected, SamplingInterval.ALLOWED_SECONDS)
     }
 
@@ -36,12 +37,17 @@ class SamplingIntervalTest {
 
     @Test
     fun `no member falls outside the allowed set`() {
-        val allowed = setOf(3, 5, 10, 15, 30, 45, 60, 120, 180)
+        val allowed = setOf(1, 3, 5, 10, 15, 30, 45, 60, 120, 180)
         SamplingInterval.entries.forEach { interval ->
             assertTrue(
                 "Unexpected SamplingInterval value: ${interval.seconds}",
                 interval.seconds in allowed,
             )
         }
+    }
+
+    @Test
+    fun `ONE_SECOND member exposes seconds equal to 1`() {
+        assertEquals(1, SamplingInterval.ONE_SECOND.seconds)
     }
 }

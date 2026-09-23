@@ -20,7 +20,7 @@ import org.junit.runner.RunWith
 
 /**
  * T04 — instrumented Compose UI test for [NewSessionScreen] (UI-01):
- *  - all 9 [SamplingInterval] options are rendered;
+ *  - all [SamplingInterval] options are rendered;
  *  - no free numeric/text input is exposed anywhere on the screen for the interval.
  */
 @RunWith(AndroidJUnit4::class)
@@ -42,25 +42,25 @@ class NewSessionScreenTest {
     }
 
     @Test
-    fun rendersExactlyTheNineIntervalOptions() {
+    fun rendersExactlyAllIntervalOptions() {
         composeTestRule.setContent {
             NewSessionScreen(viewModel = newViewModel())
         }
 
-        // Exactly 9 selectable rows exist as children of the options list.
+        // Exactly one selectable row per SamplingInterval value exists as children of the options list.
         composeTestRule
             .onNodeWithTag(NewSessionScreenTestTags.INTERVAL_OPTIONS_LIST)
             .onChildren()
             .assertCountEquals(SamplingInterval.entries.size)
 
-        // Every one of the 9 allowed values is individually present and displayed.
+        // Every one of the allowed values is individually present and displayed.
         SamplingInterval.entries.forEach { interval ->
             composeTestRule
                 .onNodeWithTag(NewSessionScreenTestTags.intervalOption(interval))
                 .assertIsDisplayed()
         }
 
-        assertEquals(9, SamplingInterval.entries.size)
+        assertEquals(10, SamplingInterval.entries.size)
     }
 
     @Test

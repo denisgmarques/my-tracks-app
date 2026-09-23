@@ -21,9 +21,11 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.NavigationDrawerItemDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -35,6 +37,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -44,9 +47,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.mytracksapp.ui.theme.ColorDivider
 import com.mytracksapp.ui.theme.PillShape
+import com.mytracksapp.ui.theme.bodyFontFamily
 import com.mytracksapp.ui.theme.headingFontFamily
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -165,14 +171,40 @@ fun MyTracksApp(
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
-            ModalDrawerSheet(modifier = Modifier.testTag(AppNavigationTestTags.DRAWER)) {
+            ModalDrawerSheet(
+                modifier = Modifier.testTag(AppNavigationTestTags.DRAWER),
+                drawerContainerColor = MaterialTheme.colorScheme.background,
+                drawerContentColor = MaterialTheme.colorScheme.onBackground,
+            ) {
+                Text(
+                    text = "My Tracks",
+                    fontFamily = headingFontFamily,
+                    fontSize = 22.sp,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.padding(horizontal = 28.dp, vertical = 24.dp),
+                )
+                HorizontalDivider(color = ColorDivider)
                 NavigationDrawerItem(
-                    label = { Text("Configurações") },
+                    icon = { Icon(Icons.Filled.Settings, contentDescription = null) },
+                    label = {
+                        Text(
+                            text = "Configurações",
+                            fontFamily = bodyFontFamily,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 15.sp,
+                        )
+                    },
                     selected = false,
                     onClick = {
                         coroutineScope.launch { drawerState.close() }
                         navController.navigate(Routes.SETTINGS) { launchSingleTop = true }
                     },
+                    shape = PillShape,
+                    colors = NavigationDrawerItemDefaults.colors(
+                        unselectedContainerColor = MaterialTheme.colorScheme.background,
+                        unselectedIconColor = MaterialTheme.colorScheme.primary,
+                        unselectedTextColor = MaterialTheme.colorScheme.onBackground,
+                    ),
                     modifier = Modifier
                         .testTag(AppNavigationTestTags.DRAWER_SETTINGS_ITEM)
                         .padding(horizontal = 12.dp, vertical = 4.dp),

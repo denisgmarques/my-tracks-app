@@ -32,7 +32,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -71,13 +70,17 @@ import com.mytracksapp.ui.theme.PillShape
 /** Stable test tags for [SettingsScreen]. */
 object SettingsScreenTestTags {
     const val SCREEN = "settings_screen"
-    const val INTERVAL_OPTIONS_LIST = "settings_interval_options_list"
     const val SPEED_UNIT_OPTIONS = "settings_speed_unit_options"
     const val DISTANCE_UNIT_OPTIONS = "settings_distance_unit_options"
     const val STOP_RADIUS_FIELD = "settings_stop_radius_field"
     const val STOP_RADIUS_ERROR = "settings_stop_radius_error"
     const val STOP_DURATION_FIELD = "settings_stop_duration_field"
     const val STOP_DURATION_ERROR = "settings_stop_duration_error"
+
+    /** GPS sampling interval combobox: row showing the current value + the dropdown it opens. */
+    const val INTERVAL_ROW = "settings_interval_row"
+    const val INTERVAL_VALUE = "settings_interval_value"
+    const val INTERVAL_MENU = "settings_interval_menu"
 
     /** T15 (UI-04): GPS-precision segmented control. */
     const val GPS_PRECISION_OPTIONS = "settings_gps_precision_options"
@@ -131,6 +134,7 @@ fun SettingsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val focusManager = LocalFocusManager.current
+    var intervalMenuExpanded by remember { mutableStateOf(false) }
     var exportFormatMenuExpanded by remember { mutableStateOf(false) }
     var showClearHistoryDialog by remember { mutableStateOf(false) }
 
@@ -146,32 +150,49 @@ fun SettingsScreen(
         Text(text = "Configurações", style = MaterialTheme.typography.titleLarge)
 
         SettingsSection(label = "Intervalo de leitura do GPS") {
-            Column(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(MaterialTheme.shapes.large)
                     .background(MaterialTheme.colorScheme.surface)
-                    .selectableGroup()
-                    .padding(horizontal = 8.dp)
-                    .testTag(SettingsScreenTestTags.INTERVAL_OPTIONS_LIST),
+                    .clickable { intervalMenuExpanded = true }
+                    .testTag(SettingsScreenTestTags.INTERVAL_ROW)
+                    .padding(horizontal = 18.dp, vertical = 16.dp),
             ) {
-                SamplingInterval.entries.forEach { interval ->
-                    val isSelected = interval == uiState.samplingInterval
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .selectable(
-                                selected = isSelected,
-                                onClick = { viewModel.onSamplingIntervalSelected(interval) },
-                                role = Role.RadioButton,
-                            )
-                            .testTag(SettingsScreenTestTags.intervalOption(interval))
-                            .padding(vertical = 6.dp, horizontal = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        RadioButton(selected = isSelected, onClick = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(text = "${interval.seconds} s", fontSize = 15.sp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = "${uiState.samplingInterval.seconds} s",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.testTag(SettingsScreenTestTags.INTERVAL_VALUE),
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.Filled.ChevronRight,
+                        contentDescription = null,
+                        tint = Neutral600,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+                DropdownMenu(
+                    expanded = intervalMenuExpanded,
+                    onDismissRequest = { intervalMenuExpanded = false },
+                    modifier = Modifier.testTag(SettingsScreenTestTags.INTERVAL_MENU),
+                ) {
+                    SamplingInterval.entries.forEach { interval ->
+                        DropdownMenuItem(
+                            text = { Text("${interval.seconds} s") },
+                            onClick = {
+                                viewModel.onSamplingIntervalSelected(interval)
+                                intervalMenuExpanded = false
+                            },
+                            modifier = Modifier.testTag(SettingsScreenTestTags.intervalOption(interval)),
+                        )
                     }
                 }
             }

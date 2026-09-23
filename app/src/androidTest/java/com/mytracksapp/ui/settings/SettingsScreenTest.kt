@@ -109,6 +109,10 @@ class SettingsScreenTest {
         }
 
         composeTestRule
+            .onNodeWithTag(SettingsScreenTestTags.INTERVAL_ROW)
+            .performScrollTo()
+            .performClick()
+        composeTestRule
             .onNodeWithTag(SettingsScreenTestTags.intervalOption(SamplingInterval.SIXTY_SECONDS))
             .performClick()
 

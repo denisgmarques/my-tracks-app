@@ -1,6 +1,5 @@
 package com.mytracksapp.ui.tracking
 
-import android.widget.Toast
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
@@ -9,20 +8,17 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloseFullscreen
-import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -30,7 +26,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -45,7 +40,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
@@ -82,7 +76,6 @@ object TrackingScreenTestTags {
     const val STOPPED_TIME = "tracking_stopped_time"
     const val MOVING_TIME = "tracking_moving_time"
     const val FINISH_BUTTON = "tracking_finish_button"
-    const val EXPORT_BUTTON = "tracking_export_button"
     const val MAP_EXPAND_BUTTON = "tracking_map_expand_button"
 }
 
@@ -102,21 +95,18 @@ private val MapExpandedHeight = 420.dp
  *  - **Header**: the design's reference header has a hamburger menu button AND an "Exportar"
  *    button, `space-between`. This screen is always composed inside [com.mytracksapp.ui.navigation.MyTracksApp]'s
  *    `Scaffold`, whose shared `TopAppBar` already renders the hamburger menu (opens the same
- *    drawer) above this screen's content — duplicating a second menu button here would be a dead
- *    control with nothing new to do, so only the "Exportar" button is rendered, right-aligned.
+ *    drawer) above this screen's content, so no menu button is needed here. No export action
+ *    either: [ExportService.export] (see its doc) explicitly rejects any session that isn't
+ *    [com.mytracksapp.data.local.entity.SessionStatus.FINISHED] — an active session (this screen,
+ *    always) can never satisfy that, and a button that can only ever explain why it doesn't work
+ *    is worse than no button — dropped entirely per developer feedback, freeing up the header
+ *    space too.
  *  - **"My Tracks" title**: the design's content block pairs a small context line ("Hoje · Praia
  *    do Gravatá") with a big "My Tracks" heading. Repeating "My Tracks" here would be redundant
  *    with the app-wide `TopAppBar` title directly above it, and this app has no location-naming
  *    feature to fill in a real place name — inventing one ("Praia do Gravatá") would be dishonest
  *    UI. Kept only the small context line, and reused the heading slot for the session's actual
  *    status ("Sessão em andamento") instead of the redundant app name.
- *  - **Export**: [ExportService.export] (see its doc) explicitly rejects any session that isn't
- *    [com.mytracksapp.data.local.entity.SessionStatus.FINISHED] — an active session (this screen,
- *    always) can never satisfy that. Wiring a real export here would mean changing
- *    `ExportService`'s contract, which is out of scope for a visual redesign. The button is still
- *    rendered exactly per the design (so the visual element isn't silently dropped) but
- *    [onExportClick] defaults to a no-op; tapping it shows a short, honest explanation instead of
- *    silently doing nothing.
  *  - **Footer**: the design's reference footer shows "Histórico"/"Nova sessão" — global
  *    navigation this app already renders via `AppNavigation.kt`'s bottom bar on every screen
  *    (including this one). Duplicating those here would be two ways to do the same thing on
@@ -132,9 +122,6 @@ private val MapExpandedHeight = 420.dp
  * production callers wire it to `SessionController.stopSession` and navigate away once it
  * completes. Defaults to a no-op so existing callers/tests that don't care about finishing a
  * session keep compiling.
- *
- * [onExportClick] is an optional extension seam for a real export flow, see "Export" above.
- * Defaults to a no-op so existing callers/tests keep compiling.
  */
 @Composable
 fun TrackingScreen(
@@ -142,13 +129,11 @@ fun TrackingScreen(
     modifier: Modifier = Modifier,
     onPolylineApplied: (List<LatLng>) -> Unit = {},
     onFinishSession: suspend (String) -> Unit = {},
-    onExportClick: () -> Unit = {},
     onKeepScreenOnApplied: (android.view.View) -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var isFinishing by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
-    val context = LocalContext.current
     var mapExpanded by rememberSaveable { mutableStateOf(false) }
 
     // T09 (RF-07, RNF-04) — keeps the device screen on for exactly as long as this screen is
@@ -156,7 +141,7 @@ fun TrackingScreen(
     // so no other screen (Histórico, Configurações, SessionDetailScreen) is ever affected.
     // Resetting to false in onDispose covers both leaving this screen and the preference flipping
     // off mid-session (the key recomposes the effect either way). [onKeepScreenOnApplied] is an
-    // optional test seam (mirrors [onPolylineApplied]/[onExportClick] above) letting instrumented
+    // optional test seam (mirrors [onPolylineApplied] above) letting instrumented
     // tests observe the exact View instance this effect toggled, without depending on
     // Compose-internal test APIs; production callers never set it.
     val view = LocalView.current
@@ -185,34 +170,6 @@ fun TrackingScreen(
                 .weight(1f)
                 .verticalScroll(rememberScrollState()),
         ) {
-            // Header: only "Exportar" — the hamburger menu already lives in the shared TopAppBar
-            // above this screen (see the class doc's "Header" note).
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.End,
-            ) {
-                OutlinedButton(
-                    onClick = {
-                        onExportClick()
-                        Toast.makeText(
-                            context,
-                            "Exportação disponível ao encerrar a sessão",
-                            Toast.LENGTH_SHORT,
-                        ).show()
-                    },
-                    shape = PillShape,
-                    modifier = Modifier
-                        .height(44.dp)
-                        .testTag(TrackingScreenTestTags.EXPORT_BUTTON),
-                ) {
-                    Icon(Icons.Filled.Download, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Exportar")
-                }
-            }
-
             Column(
                 modifier = Modifier
                     .fillMaxWidth()

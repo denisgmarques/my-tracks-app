@@ -14,6 +14,15 @@ enum class DistanceUnit {
 
     /** Nautical miles. */
     NAUTICAL_MILES,
+    ;
+
+    /** Short, human-readable suffix for UI display next to a converted value (e.g. "3.2 km"). */
+    val displaySuffix: String
+        get() = when (this) {
+            KM -> "km"
+            MILES -> "mi"
+            NAUTICAL_MILES -> "NM"
+        }
 }
 
 /**

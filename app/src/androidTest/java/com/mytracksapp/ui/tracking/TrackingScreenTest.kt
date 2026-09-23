@@ -3,15 +3,21 @@ package com.mytracksapp.ui.tracking
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.datastore.preferences.preferencesDataStoreFile
+import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.android.gms.maps.model.LatLng
 import com.mytracksapp.data.local.dao.GpsPointDao
 import com.mytracksapp.data.local.entity.GpsPointEntity
+import com.mytracksapp.data.settings.SettingsRepository
 import java.util.Collections
+import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
+import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -63,10 +69,25 @@ class TrackingScreenTest {
     @get:Rule
     val composeTestRule = createComposeRule()
 
+    private val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+    private lateinit var dataStoreName: String
+
+    @Before
+    fun uniqueDataStoreName() {
+        dataStoreName = "test_tracking_screen_settings_${UUID.randomUUID()}"
+    }
+
+    @After
+    fun deleteDataStoreFile() {
+        context.preferencesDataStoreFile(dataStoreName).delete()
+    }
+
+    private fun settingsRepository() = SettingsRepository(context, dataStoreName)
+
     @Test
-    fun allFiveUi03MetricsAreVisibleSimultaneouslyWithNoExtraNavigation() {
+    fun allSixUi03MetricsAreVisibleSimultaneouslyWithNoExtraNavigation() {
         val sessionId = "tracking-screen-test-metrics"
-        val viewModel = TrackingViewModel(sessionId, FakeGpsPointDao())
+        val viewModel = TrackingViewModel(sessionId, FakeGpsPointDao(), settingsRepository())
 
         composeTestRule.setContent {
             TrackingScreen(viewModel = viewModel)
@@ -74,6 +95,7 @@ class TrackingScreenTest {
 
         composeTestRule.onNodeWithTag(TrackingScreenTestTags.INSTANT_SPEED).assertIsDisplayed()
         composeTestRule.onNodeWithTag(TrackingScreenTestTags.AVERAGE_SPEED).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(TrackingScreenTestTags.TOTAL_DISTANCE).assertIsDisplayed()
         composeTestRule.onNodeWithTag(TrackingScreenTestTags.ELAPSED_TIME).assertIsDisplayed()
         composeTestRule.onNodeWithTag(TrackingScreenTestTags.STOPPED_TIME).assertIsDisplayed()
         composeTestRule.onNodeWithTag(TrackingScreenTestTags.MOVING_TIME).assertIsDisplayed()
@@ -82,7 +104,7 @@ class TrackingScreenTest {
     @Test
     fun mapComponentIsGenuinelyPresentInTheScreen() {
         val sessionId = "tracking-screen-test-map"
-        val viewModel = TrackingViewModel(sessionId, FakeGpsPointDao())
+        val viewModel = TrackingViewModel(sessionId, FakeGpsPointDao(), settingsRepository())
 
         composeTestRule.setContent {
             TrackingScreen(viewModel = viewModel)
@@ -95,7 +117,7 @@ class TrackingScreenTest {
     fun eachNewPointBecomesThePolylinesLastVertex() {
         val sessionId = "tracking-screen-test-polyline"
         val dao = FakeGpsPointDao()
-        val viewModel = TrackingViewModel(sessionId, dao)
+        val viewModel = TrackingViewModel(sessionId, dao, settingsRepository())
         val appliedPolylines = Collections.synchronizedList(mutableListOf<List<LatLng>>())
 
         composeTestRule.setContent {

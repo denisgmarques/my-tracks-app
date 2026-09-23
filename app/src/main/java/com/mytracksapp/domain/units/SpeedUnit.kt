@@ -14,6 +14,15 @@ enum class SpeedUnit {
 
     /** Knots (nautical miles per hour). */
     KNOTS,
+    ;
+
+    /** Short, human-readable suffix for UI display next to a converted value (e.g. "5.4 km/h"). */
+    val displaySuffix: String
+        get() = when (this) {
+            KMH -> "km/h"
+            MS -> "m/s"
+            KNOTS -> "nós"
+        }
 }
 
 /**

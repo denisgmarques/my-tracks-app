@@ -6,21 +6,27 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.datastore.preferences.preferencesDataStoreFile
+import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.mytracksapp.data.local.dao.GpsPointDao
 import com.mytracksapp.data.local.dao.TrackingSessionDao
 import com.mytracksapp.data.local.entity.GpsPointEntity
 import com.mytracksapp.data.local.entity.SessionStatus
 import com.mytracksapp.data.local.entity.TrackingSessionEntity
+import com.mytracksapp.data.settings.SettingsRepository
 import com.mytracksapp.domain.export.ExportFormat
 import com.mytracksapp.domain.export.ExportService
 import com.mytracksapp.ui.history.SessionDetailScreen
 import com.mytracksapp.ui.history.SessionDetailScreenTestTags
 import com.mytracksapp.ui.history.SessionDetailViewModel
+import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -71,6 +77,21 @@ class ExportFormatDialogTest {
     @get:Rule
     val composeTestRule = createComposeRule()
 
+    private val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+    private lateinit var dataStoreName: String
+
+    @Before
+    fun uniqueDataStoreName() {
+        dataStoreName = "test_export_dialog_settings_${UUID.randomUUID()}"
+    }
+
+    @After
+    fun deleteDataStoreFile() {
+        context.preferencesDataStoreFile(dataStoreName).delete()
+    }
+
+    private fun settingsRepository() = SettingsRepository(context, dataStoreName)
+
     @Test
     fun exportActionIsHiddenForAnActiveNonFinishedSession() {
         val sessionId = "active-session"
@@ -78,6 +99,7 @@ class ExportFormatDialogTest {
             sessionId,
             FakeTrackingSessionDao(sessionId, SessionStatus.ACTIVE),
             FakeGpsPointDao(sessionId),
+            settingsRepository(),
         )
 
         composeTestRule.setContent {
@@ -96,6 +118,7 @@ class ExportFormatDialogTest {
             sessionId,
             FakeTrackingSessionDao(sessionId, SessionStatus.FINISHED),
             FakeGpsPointDao(sessionId),
+            settingsRepository(),
         )
 
         composeTestRule.setContent {
@@ -114,6 +137,7 @@ class ExportFormatDialogTest {
             sessionId,
             FakeTrackingSessionDao(sessionId, SessionStatus.FINISHED),
             FakeGpsPointDao(sessionId),
+            settingsRepository(),
         )
 
         composeTestRule.setContent {
@@ -133,7 +157,7 @@ class ExportFormatDialogTest {
         val trackingSessionDao = FakeTrackingSessionDao(sessionId, SessionStatus.FINISHED)
         val gpsPointDao = FakeGpsPointDao(sessionId)
         val exportService = ExportService(trackingSessionDao, gpsPointDao)
-        val viewModel = SessionDetailViewModel(sessionId, trackingSessionDao, gpsPointDao)
+        val viewModel = SessionDetailViewModel(sessionId, trackingSessionDao, gpsPointDao, settingsRepository())
 
         var exportedFileName: String? = null
         var exportedFormat: ExportFormat? = null
@@ -168,7 +192,7 @@ class ExportFormatDialogTest {
         val trackingSessionDao = FakeTrackingSessionDao(sessionId, SessionStatus.FINISHED)
         val gpsPointDao = FakeGpsPointDao(sessionId)
         val exportService = ExportService(trackingSessionDao, gpsPointDao)
-        val viewModel = SessionDetailViewModel(sessionId, trackingSessionDao, gpsPointDao)
+        val viewModel = SessionDetailViewModel(sessionId, trackingSessionDao, gpsPointDao, settingsRepository())
 
         var exportedFileName: String? = null
         var exportedFormat: ExportFormat? = null

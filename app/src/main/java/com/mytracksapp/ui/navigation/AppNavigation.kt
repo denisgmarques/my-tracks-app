@@ -214,6 +214,7 @@ fun MyTracksApp(
                         sessionId = sessionId,
                         gpsPointDao = gpsPointDao,
                         sessionController = sessionController,
+                        settingsRepository = settingsRepository,
                         onSessionFinished = {
                             // `inclusive = true` clears the New Session entry too, not just Tracking's.
                             // Leaving New Session's entry alive kept its ViewModel (and NavBackStackEntry
@@ -246,6 +247,7 @@ fun MyTracksApp(
                         trackingSessionDao = trackingSessionDao,
                         gpsPointDao = gpsPointDao,
                         exportService = exportService,
+                        settingsRepository = settingsRepository,
                     )
                 }
 
@@ -325,10 +327,11 @@ private fun TrackingRoute(
     sessionId: String,
     gpsPointDao: GpsPointDao,
     sessionController: SessionController,
+    settingsRepository: SettingsRepository,
     onSessionFinished: () -> Unit,
 ) {
     val viewModel: TrackingViewModel = viewModel(
-        factory = TrackingViewModelFactory(sessionId, gpsPointDao),
+        factory = TrackingViewModelFactory(sessionId, gpsPointDao, settingsRepository),
     )
 
     TrackingScreen(
@@ -358,9 +361,10 @@ private fun SessionDetailRoute(
     trackingSessionDao: TrackingSessionDao,
     gpsPointDao: GpsPointDao,
     exportService: ExportService,
+    settingsRepository: SettingsRepository,
 ) {
     val viewModel: SessionDetailViewModel = viewModel(
-        factory = SessionDetailViewModelFactory(sessionId, trackingSessionDao, gpsPointDao),
+        factory = SessionDetailViewModelFactory(sessionId, trackingSessionDao, gpsPointDao, settingsRepository),
     )
     val context = LocalContext.current
 

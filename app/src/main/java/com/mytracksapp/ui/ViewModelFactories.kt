@@ -51,13 +51,14 @@ class SettingsViewModelFactory(
 class TrackingViewModelFactory(
     private val sessionId: String,
     private val gpsPointDao: GpsPointDao,
+    private val settingsRepository: SettingsRepository,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         require(modelClass.isAssignableFrom(TrackingViewModel::class.java)) {
             "Unknown ViewModel class $modelClass"
         }
-        return TrackingViewModel(sessionId, gpsPointDao) as T
+        return TrackingViewModel(sessionId, gpsPointDao, settingsRepository) as T
     }
 }
 
@@ -78,12 +79,13 @@ class SessionDetailViewModelFactory(
     private val sessionId: String,
     private val trackingSessionDao: TrackingSessionDao,
     private val gpsPointDao: GpsPointDao,
+    private val settingsRepository: SettingsRepository,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         require(modelClass.isAssignableFrom(SessionDetailViewModel::class.java)) {
             "Unknown ViewModel class $modelClass"
         }
-        return SessionDetailViewModel(sessionId, trackingSessionDao, gpsPointDao) as T
+        return SessionDetailViewModel(sessionId, trackingSessionDao, gpsPointDao, settingsRepository) as T
     }
 }

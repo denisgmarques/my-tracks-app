@@ -18,6 +18,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.google.android.gms.maps.model.LatLng
+import com.mytracksapp.domain.units.DistanceFormatter
+import com.mytracksapp.domain.units.ElapsedTimeFormatter
+import com.mytracksapp.domain.units.SpeedFormatter
 import kotlinx.coroutines.launch
 
 /** Stable test tags for [TrackingScreen], used by TrackingScreenTest (UI-02, UI-03). */
@@ -25,6 +28,7 @@ object TrackingScreenTestTags {
     const val SCREEN = "tracking_screen"
     const val INSTANT_SPEED = "tracking_instant_speed"
     const val AVERAGE_SPEED = "tracking_average_speed"
+    const val TOTAL_DISTANCE = "tracking_total_distance"
     const val ELAPSED_TIME = "tracking_elapsed_time"
     const val STOPPED_TIME = "tracking_stopped_time"
     const val MOVING_TIME = "tracking_moving_time"
@@ -70,23 +74,33 @@ fun TrackingScreen(
         Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
             Text(text = "Sessão ${uiState.sessionId}", style = MaterialTheme.typography.titleLarge)
             Text(
-                text = "Velocidade instantânea: ${"%.2f".format(uiState.instantSpeedMetersPerSecond)} m/s",
+                text = "Velocidade instantânea: ${"%.2f".format(
+                    SpeedFormatter.toDisplayValue(uiState.instantSpeedMetersPerSecond, uiState.speedUnit),
+                )} ${uiState.speedUnit.displaySuffix}",
                 modifier = Modifier.testTag(TrackingScreenTestTags.INSTANT_SPEED),
             )
             Text(
-                text = "Velocidade média: ${"%.2f".format(uiState.averageSpeedMetersPerSecond)} m/s",
+                text = "Velocidade média: ${"%.2f".format(
+                    SpeedFormatter.toDisplayValue(uiState.averageSpeedMetersPerSecond, uiState.speedUnit),
+                )} ${uiState.speedUnit.displaySuffix}",
                 modifier = Modifier.testTag(TrackingScreenTestTags.AVERAGE_SPEED),
             )
             Text(
-                text = "Tempo total: ${uiState.elapsedTimeMillis} ms",
+                text = "Distância total: ${"%.2f".format(
+                    DistanceFormatter.toDisplayValue(uiState.totalDistanceMeters, uiState.distanceUnit),
+                )} ${uiState.distanceUnit.displaySuffix}",
+                modifier = Modifier.testTag(TrackingScreenTestTags.TOTAL_DISTANCE),
+            )
+            Text(
+                text = "Tempo total: ${ElapsedTimeFormatter.format(uiState.elapsedTimeMillis)}",
                 modifier = Modifier.testTag(TrackingScreenTestTags.ELAPSED_TIME),
             )
             Text(
-                text = "Tempo parado: ${uiState.stoppedTimeMillis} ms",
+                text = "Tempo parado: ${ElapsedTimeFormatter.format(uiState.stoppedTimeMillis)}",
                 modifier = Modifier.testTag(TrackingScreenTestTags.STOPPED_TIME),
             )
             Text(
-                text = "Tempo em movimento: ${uiState.movingTimeMillis} ms",
+                text = "Tempo em movimento: ${ElapsedTimeFormatter.format(uiState.movingTimeMillis)}",
                 modifier = Modifier.testTag(TrackingScreenTestTags.MOVING_TIME),
             )
             Button(

@@ -1,21 +1,31 @@
 package com.mytracksapp.ui.tracking
 
+import androidx.datastore.preferences.preferencesDataStoreFile
+import androidx.test.core.app.ApplicationProvider
 import com.mytracksapp.data.local.dao.GpsPointDao
 import com.mytracksapp.data.local.entity.GpsPointEntity
+import com.mytracksapp.data.settings.SettingsRepository
 import com.mytracksapp.domain.stats.StatsEngine
+import com.mytracksapp.domain.units.DistanceUnit
+import com.mytracksapp.domain.units.SpeedUnit
+import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.resetMain
-import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
  * In-memory [GpsPointDao] double for [TrackingViewModelTest]: each session id gets its own
@@ -49,48 +59,84 @@ private class FakeGpsPointDao : GpsPointDao {
 
 /**
  * T08 — [TrackingViewModel] unit test (UI-02, UI-03, RNF-04): a simulated flow of
- * [GpsPointEntity] emissions updates the exposed polyline and the 5 UI-03 metrics on every
+ * [GpsPointEntity] emissions updates the exposed polyline and the UI-03 metrics on every
  * emission, with all math coming from [StatsEngine]/`SegmentClassifier` rather than being
  * reimplemented in the test or the ViewModel.
+ *
+ * Phase C follow-up: [TrackingViewModel] now also depends on [SettingsRepository] (for
+ * unit-aware display + configured stop thresholds), which requires a real Android [Context] under
+ * the hood (Jetpack DataStore). Robolectric supplies that on the plain JVM test path — the same
+ * pattern `LocationPermissionManagerTest` already established in this codebase — so this remains
+ * a fast, non-instrumented unit test.
+ *
+ * These tests deliberately use a real [Dispatchers.Default]-backed `Main` dispatcher plus
+ * real-time polling (`awaitState`) instead of `StandardTestDispatcher`/virtual time: DataStore's
+ * `Flow<Preferences>` does its actual I/O on its own internal (real) dispatcher, so it can never
+ * be driven to completion by `advanceUntilIdle()` on an unrelated virtual scheduler. Polling with
+ * a real timeout is the same technique the instrumented Compose tests already use
+ * (`composeTestRule.waitUntil`) for exactly this reason.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [29])
 class TrackingViewModelTest {
 
-    private val testDispatcher = StandardTestDispatcher()
+    private val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+    private lateinit var dataStoreName: String
 
     @Before
     fun setUp() {
-        Dispatchers.setMain(testDispatcher)
+        Dispatchers.setMain(Dispatchers.Default)
+        dataStoreName = "test_tracking_vm_settings_${UUID.randomUUID()}"
     }
 
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+        context.preferencesDataStoreFile(dataStoreName).delete()
+    }
+
+    private fun settingsRepository() = SettingsRepository(context, dataStoreName)
+
+    private suspend fun awaitState(
+        viewModel: TrackingViewModel,
+        timeoutMillis: Long = 5_000,
+        predicate: (TrackingUiState) -> Boolean,
+    ): TrackingUiState = withTimeout(timeoutMillis) {
+        var state = viewModel.uiState.value
+        while (!predicate(state)) {
+            delay(10)
+            state = viewModel.uiState.value
+        }
+        state
     }
 
     @Test
-    fun `initial state before any point is empty polyline and zeroed metrics`() = runTest(testDispatcher) {
+    fun `initial state before any point is empty polyline and zeroed metrics`() = runBlocking {
         val dao = FakeGpsPointDao()
-        val viewModel = TrackingViewModel(sessionId = "session-1", gpsPointDao = dao)
-        testDispatcher.scheduler.advanceUntilIdle()
+        val viewModel = TrackingViewModel(sessionId = "session-1", gpsPointDao = dao, settingsRepository = settingsRepository())
 
-        val state = viewModel.uiState.value
+        // Defaults, per UserSettings(), until SettingsRepository ever persists anything — this
+        // also doubles as the "the settings flow has emitted at least once" wait.
+        val state = awaitState(viewModel) { it.speedUnit == SpeedUnit.KMH }
+
         assertEquals("session-1", state.sessionId)
         assertTrue(state.polyline.isEmpty())
         assertEquals(0.0, state.instantSpeedMetersPerSecond, 0.0)
         assertEquals(0.0, state.averageSpeedMetersPerSecond, 0.0)
+        assertEquals(0.0, state.totalDistanceMeters, 0.0)
         assertEquals(0L, state.elapsedTimeMillis)
         assertEquals(0L, state.stoppedTimeMillis)
         assertEquals(0L, state.movingTimeMillis)
+        assertEquals(DistanceUnit.KM, state.distanceUnit)
     }
 
     @Test
-    fun `each new emission updates the polyline's last vertex and recalculates all 5 metrics`() =
-        runTest(testDispatcher) {
+    fun `each new emission updates the polyline's last vertex and recalculates all metrics`() =
+        runBlocking {
             val sessionId = "session-1"
             val dao = FakeGpsPointDao()
-            val viewModel = TrackingViewModel(sessionId = sessionId, gpsPointDao = dao)
-            testDispatcher.scheduler.advanceUntilIdle()
+            val viewModel = TrackingViewModel(sessionId = sessionId, gpsPointDao = dao, settingsRepository = settingsRepository())
 
             // First point: no interval yet, so no instant speed and zero elapsed time.
             val point1 = GpsPointEntity(
@@ -98,14 +144,13 @@ class TrackingViewModelTest {
                 latitude = 0.0, longitude = 0.0, accuracy = 5f,
             )
             dao.insert(point1)
-            testDispatcher.scheduler.advanceUntilIdle()
 
-            var state = viewModel.uiState.value
-            assertEquals(1, state.polyline.size)
+            var state = awaitState(viewModel) { it.polyline.size == 1 }
             assertEquals(0.0, state.polyline.last().latitude, 0.0)
             assertEquals(0.0, state.polyline.last().longitude, 0.0)
             assertEquals(0.0, state.instantSpeedMetersPerSecond, 0.0)
             assertEquals(0L, state.elapsedTimeMillis)
+            assertEquals(0.0, state.totalDistanceMeters, 0.0)
 
             // Second point: an interval now exists (RF-05) — polyline gains a last vertex and
             // metrics are recalculated from StatsEngine, not reimplemented here.
@@ -114,10 +159,8 @@ class TrackingViewModelTest {
                 latitude = 0.0009, longitude = 0.0, accuracy = 5f,
             )
             dao.insert(point2)
-            testDispatcher.scheduler.advanceUntilIdle()
 
-            state = viewModel.uiState.value
-            assertEquals(2, state.polyline.size)
+            state = awaitState(viewModel) { it.polyline.size == 2 }
             assertEquals(point2.latitude, state.polyline.last().latitude, 0.0)
             assertEquals(point2.longitude, state.polyline.last().longitude, 0.0)
 
@@ -126,6 +169,8 @@ class TrackingViewModelTest {
             // Only one interval exists so far: average speed equals the (only) instant speed.
             assertEquals(expectedInstantSpeed, state.averageSpeedMetersPerSecond, 1e-9)
             assertEquals(10_000L, state.elapsedTimeMillis)
+            val expectedTotalDistance = StatsEngine.totalDistanceMeters(listOf(point1, point2))
+            assertEquals(expectedTotalDistance, state.totalDistanceMeters, 1e-9)
             // RF-06 invariant: stopped + moving == total elapsed time, on every emission.
             assertEquals(10_000L, state.stoppedTimeMillis + state.movingTimeMillis)
 
@@ -135,29 +180,55 @@ class TrackingViewModelTest {
                 latitude = 0.0020, longitude = 0.0, accuracy = 5f,
             )
             dao.insert(point3)
-            testDispatcher.scheduler.advanceUntilIdle()
 
-            state = viewModel.uiState.value
-            assertEquals(3, state.polyline.size)
+            state = awaitState(viewModel) { it.polyline.size == 3 }
             assertEquals(point3.latitude, state.polyline.last().latitude, 0.0)
             assertEquals(point3.longitude, state.polyline.last().longitude, 0.0)
             assertEquals(20_000L, state.elapsedTimeMillis)
             assertEquals(20_000L, state.stoppedTimeMillis + state.movingTimeMillis)
+            assertEquals(
+                StatsEngine.totalDistanceMeters(listOf(point1, point2, point3)),
+                state.totalDistanceMeters,
+                1e-9,
+            )
         }
 
     @Test
-    fun `two ViewModels observing different session ids stay independent`() = runTest(testDispatcher) {
+    fun `two ViewModels observing different session ids stay independent`() = runBlocking {
         val dao = FakeGpsPointDao()
-        val viewModelA = TrackingViewModel(sessionId = "session-a", gpsPointDao = dao)
-        val viewModelB = TrackingViewModel(sessionId = "session-b", gpsPointDao = dao)
-        testDispatcher.scheduler.advanceUntilIdle()
+        val viewModelA = TrackingViewModel(sessionId = "session-a", gpsPointDao = dao, settingsRepository = settingsRepository())
+        val viewModelB = TrackingViewModel(sessionId = "session-b", gpsPointDao = dao, settingsRepository = settingsRepository())
 
         dao.insert(
             GpsPointEntity(sessionId = "session-a", timestamp = 0L, latitude = 1.0, longitude = 1.0, accuracy = 5f),
         )
-        testDispatcher.scheduler.advanceUntilIdle()
 
-        assertEquals(1, viewModelA.uiState.value.polyline.size)
+        awaitState(viewModelA) { it.polyline.size == 1 }
+        // Give viewModelB every chance to (incorrectly) pick up session-a's point too.
+        delay(100)
         assertTrue(viewModelB.uiState.value.polyline.isEmpty())
     }
+
+    @Test
+    fun `uiState reflects the currently configured speed and distance units, and reacts to changes`() =
+        runBlocking {
+            val sessionId = "session-units"
+            val dao = FakeGpsPointDao()
+            val repository = settingsRepository()
+            repository.setSpeedUnit(SpeedUnit.KNOTS)
+            repository.setDistanceUnit(DistanceUnit.MILES)
+
+            val viewModel = TrackingViewModel(sessionId = sessionId, gpsPointDao = dao, settingsRepository = repository)
+
+            var state = awaitState(viewModel) { it.speedUnit == SpeedUnit.KNOTS }
+            assertEquals(DistanceUnit.MILES, state.distanceUnit)
+
+            // Changing settings while the "session" is active (same repository instance a
+            // Settings screen would write through) must be reflected reactively, without
+            // recreating the ViewModel.
+            repository.setSpeedUnit(SpeedUnit.MS)
+
+            state = awaitState(viewModel) { it.speedUnit == SpeedUnit.MS }
+            assertEquals(DistanceUnit.MILES, state.distanceUnit)
+        }
 }

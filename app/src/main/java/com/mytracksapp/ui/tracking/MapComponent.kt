@@ -22,6 +22,8 @@ import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.MapView
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.LatLngBounds
+import com.google.android.gms.maps.model.Marker
+import com.google.android.gms.maps.model.MarkerOptions
 import com.google.android.gms.maps.model.Polyline
 import com.google.android.gms.maps.model.PolylineOptions
 
@@ -29,6 +31,17 @@ import com.google.android.gms.maps.model.PolylineOptions
 object MapComponentTestTags {
     const val MAP_VIEW = "map_component_map_view"
 }
+
+/**
+ * One pin to render on [MapComponent] (Phase C follow-up — stop-location pins, RF-06 surfaced on
+ * the map). [title]/[snippet] populate the marker's info window (e.g. "Parada" / a formatted stop
+ * duration); both are optional since not every caller has that metadata to show.
+ */
+data class MapMarkerInfo(
+    val position: LatLng,
+    val title: String? = null,
+    val snippet: String? = null,
+)
 
 /**
  * T09 — thin Compose wrapper around the real Google Maps SDK for Android
@@ -44,6 +57,10 @@ object MapComponentTestTags {
  * polyline mirrors [TrackingViewModel]'s state exactly on every recomposition: each new point
  * the ViewModel emits becomes the new last vertex (UI-02's AC).
  *
+ * [markers] (Phase C follow-up) is the exact set of pins this composable renders, following the
+ * identical "always replace, never incrementally append" contract as [polyline]: every time
+ * [markers] changes, the previous set of [Marker]s is removed and the new set added from scratch.
+ *
  * [onPolylineApplied] is an optional test seam — production callers never set it. It fires with
  * the exact [LatLng] list derived from [polyline] on every recomposition where [polyline]
  * changes, INDEPENDENTLY of whether the real [GoogleMap] has finished initializing yet (that
@@ -53,12 +70,18 @@ object MapComponentTestTags {
  * key this prototype intentionally does not ship (see `app/src/main/res/values/google_maps_api.xml`
  * and `docs/setup/google-maps-api-key.md`), so an instrumented test asserting on this seam isn't
  * at the mercy of Play Services' own initialization timing/availability.
+ *
+ * [onMarkersApplied] is [onPolylineApplied]'s exact counterpart for [markers], for exactly the
+ * same reason: it fires with the [LatLng] positions derived from [markers] on every recomposition
+ * where [markers] changes, independent of real-map readiness.
  */
 @Composable
 fun MapComponent(
     polyline: List<TrackingPolylinePoint>,
     modifier: Modifier = Modifier,
+    markers: List<MapMarkerInfo> = emptyList(),
     onPolylineApplied: (List<LatLng>) -> Unit = {},
+    onMarkersApplied: (List<LatLng>) -> Unit = {},
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -68,6 +91,7 @@ fun MapComponent(
     }
     var googleMap by remember { mutableStateOf<GoogleMap?>(null) }
     var currentOverlay by remember { mutableStateOf<Polyline?>(null) }
+    var currentMarkers by remember { mutableStateOf<List<Marker>>(emptyList()) }
 
     DisposableEffect(lifecycleOwner, mapView) {
         mapView.onCreate(Bundle())
@@ -104,39 +128,59 @@ fun MapComponent(
         onPolylineApplied(polyline.map { LatLng(it.latitude, it.longitude) })
     }
 
+    // Phase C follow-up: same decoupling as above, for the pin/marker list.
+    LaunchedEffect(markers) {
+        onMarkersApplied(markers.map { it.position })
+    }
+
     // Separately (best-effort): once the real map is ready, actually draw/replace the polyline
-    // overlay on it every time the ViewModel's state changes.
+    // overlay AND the markers on it every time the ViewModel's state changes.
     //
-    // Camera framing matters as much as the overlay itself: `newLatLng` alone only PANS, it never
-    // zooms, so at the map's default (world-view) zoom level a walking-scale route is a handful of
-    // meters — visually indistinguishable from a single point. A single collected point zooms in
-    // close (street level); two or more points fit the camera to the route's bounding box (with
-    // padding) so the whole trail collected so far is always framed, not just its last vertex.
-    LaunchedEffect(polyline, googleMap) {
+    // Camera framing matters as much as the overlays themselves: `newLatLng` alone only PANS, it
+    // never zooms, so at the map's default (world-view) zoom level a walking-scale route is a
+    // handful of meters — visually indistinguishable from a single point. A single collected
+    // point (or a single marker, with no route yet) zooms in close (street level); two or more
+    // positions overall (route vertices AND marker pins combined) fit the camera to their
+    // bounding box (with padding) so everything collected/placed so far is always framed, not
+    // just the route's last vertex — this is why marker positions are folded into the SAME bounds
+    // calculation as the polyline's, not computed separately.
+    LaunchedEffect(polyline, markers, googleMap) {
         val map = googleMap ?: return@LaunchedEffect
+
         currentOverlay?.remove()
+        currentMarkers.forEach { it.remove() }
+
         val latLngPoints = polyline.map { LatLng(it.latitude, it.longitude) }
         currentOverlay = if (latLngPoints.size >= 2) {
             map.addPolyline(PolylineOptions().addAll(latLngPoints))
         } else {
             null
         }
+
+        currentMarkers = markers.mapNotNull { marker ->
+            val options = MarkerOptions().position(marker.position)
+            marker.title?.let { options.title(it) }
+            marker.snippet?.let { options.snippet(it) }
+            map.addMarker(options)
+        }
+
+        val allPositions = latLngPoints + markers.map { it.position }
         when {
-            latLngPoints.size == 1 -> {
-                map.moveCamera(CameraUpdateFactory.newLatLngZoom(latLngPoints.first(), 18f))
+            allPositions.size == 1 -> {
+                map.moveCamera(CameraUpdateFactory.newLatLngZoom(allPositions.first(), 18f))
             }
-            latLngPoints.size >= 2 -> {
+            allPositions.size >= 2 -> {
                 val bounds = LatLngBounds.builder().apply {
-                    latLngPoints.forEach { include(it) }
+                    allPositions.forEach { include(it) }
                 }.build()
                 // `newLatLngBounds` throws if the MapView hasn't completed its first layout pass
                 // yet (size still 0x0) — a real race the very first time a point arrives right as
-                // the map surface attaches. Falls back to a plain pan on the last point rather
-                // than crashing; the very next point recomputes bounds and self-corrects.
+                // the map surface attaches. Falls back to a plain pan on the last position rather
+                // than crashing; the very next change recomputes bounds and self-corrects.
                 try {
                     map.moveCamera(CameraUpdateFactory.newLatLngBounds(bounds, 100))
                 } catch (_: IllegalStateException) {
-                    map.moveCamera(CameraUpdateFactory.newLatLng(latLngPoints.last()))
+                    map.moveCamera(CameraUpdateFactory.newLatLng(allPositions.last()))
                 }
             }
         }

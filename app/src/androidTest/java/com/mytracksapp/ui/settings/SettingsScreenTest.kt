@@ -1,7 +1,9 @@
 package com.mytracksapp.ui.settings
 
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
@@ -16,6 +18,8 @@ import com.mytracksapp.data.local.entity.SessionStatus
 import com.mytracksapp.data.local.entity.TrackingSessionEntity
 import com.mytracksapp.data.settings.SettingsRepository
 import com.mytracksapp.data.settings.UserSettings
+import com.mytracksapp.domain.export.ExportFormat
+import com.mytracksapp.domain.model.GpsPrecision
 import com.mytracksapp.domain.model.SamplingInterval
 import com.mytracksapp.domain.units.DistanceUnit
 import com.mytracksapp.domain.units.SpeedUnit
@@ -79,6 +83,23 @@ class SettingsScreenTest {
 
     private fun settingsViewModel(repository: SettingsRepository) =
         SettingsViewModel(repository, NoOpTrackingSessionDao())
+
+    /** T15 (UI-08) — records how many times [deleteAll] was invoked, for the clear-history flow tests. */
+    private class RecordingTrackingSessionDao : TrackingSessionDao {
+        var deleteAllCallCount = 0
+            private set
+
+        override suspend fun insert(session: TrackingSessionEntity) = Unit
+        override suspend fun update(session: TrackingSessionEntity) = Unit
+        override fun getSessionById(sessionId: String): Flow<TrackingSessionEntity?> = flowOf(null)
+        override fun getAllSessions(): Flow<List<TrackingSessionEntity>> = flowOf(emptyList())
+        override fun getSessionsByStatus(status: SessionStatus): Flow<List<TrackingSessionEntity>> = flowOf(emptyList())
+        override suspend fun deleteById(sessionId: String) = Unit
+        override suspend fun deleteAll() {
+            deleteAllCallCount++
+        }
+        override suspend fun updateLocationName(sessionId: String, locationName: String?) = Unit
+    }
 
     @Test
     fun selectingSamplingInterval_persistsViaRepository() {
@@ -228,5 +249,126 @@ class SettingsScreenTest {
 
         val defaultDurationMillis = UserSettings().stopDurationMillis
         assertEquals(defaultDurationMillis, runBlocking { repository.userSettings.first().stopDurationMillis })
+    }
+
+    /** T15 (UI-04): selecting the "Equilibrada" GPS-precision option persists immediately. */
+    @Test
+    fun selectingGpsPrecision_persistsViaRepository() {
+        val repository = repository()
+        composeTestRule.setContent {
+            SettingsScreen(viewModel = settingsViewModel(repository))
+        }
+
+        composeTestRule
+            .onNodeWithTag(SettingsScreenTestTags.gpsPrecisionOption(GpsPrecision.BALANCED))
+            .performScrollTo()
+            .performClick()
+
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            runBlocking { repository.userSettings.first().gpsPrecision } == GpsPrecision.BALANCED
+        }
+        assertEquals(GpsPrecision.BALANCED, runBlocking { repository.userSettings.first().gpsPrecision })
+    }
+
+    /** T15 (UI-05): toggling "Manter tela ativa durante a sessão" persists immediately. */
+    @Test
+    fun togglingKeepScreenOn_persistsViaRepository() {
+        val repository = repository()
+        composeTestRule.setContent {
+            SettingsScreen(viewModel = settingsViewModel(repository))
+        }
+
+        // Default is `true` (RF-06) — toggling once should flip it to `false`.
+        composeTestRule
+            .onNodeWithTag(SettingsScreenTestTags.KEEP_SCREEN_ON_SWITCH)
+            .performScrollTo()
+            .performClick()
+
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            runBlocking { repository.userSettings.first().keepScreenOnEnabled } == false
+        }
+        assertEquals(false, runBlocking { repository.userSettings.first().keepScreenOnEnabled })
+    }
+
+    /** T15 (UI-07): selecting CSV in the export-format picker persists immediately. */
+    @Test
+    fun selectingExportFormat_persistsViaRepository() {
+        val repository = repository()
+        composeTestRule.setContent {
+            SettingsScreen(viewModel = settingsViewModel(repository))
+        }
+
+        composeTestRule
+            .onNodeWithTag(SettingsScreenTestTags.EXPORT_FORMAT_ROW)
+            .performScrollTo()
+            .performClick()
+        composeTestRule
+            .onNodeWithTag(SettingsScreenTestTags.exportFormatOption(ExportFormat.CSV))
+            .performClick()
+
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            runBlocking { repository.userSettings.first().defaultExportFormat } == ExportFormat.CSV
+        }
+        assertEquals(ExportFormat.CSV, runBlocking { repository.userSettings.first().defaultExportFormat })
+    }
+
+    /** T15 (UI-08): tapping "Limpar histórico" opens the confirmation dialog and does NOT delete on its own. */
+    @Test
+    fun tappingClearHistory_opensConfirmationDialog_doesNotDeleteImmediately() {
+        val repository = repository()
+        val trackingSessionDao = RecordingTrackingSessionDao()
+        composeTestRule.setContent {
+            SettingsScreen(viewModel = SettingsViewModel(repository, trackingSessionDao))
+        }
+
+        composeTestRule
+            .onNodeWithTag(SettingsScreenTestTags.CLEAR_HISTORY_ACTION)
+            .performScrollTo()
+            .performClick()
+
+        composeTestRule.onNodeWithTag(SettingsScreenTestTags.CLEAR_HISTORY_CONFIRM_DIALOG).assertIsDisplayed()
+        assertEquals(0, trackingSessionDao.deleteAllCallCount)
+    }
+
+    /** T15 (UI-08): cancelling the confirmation dialog never deletes anything. */
+    @Test
+    fun cancellingClearHistoryDialog_doesNotDelete() {
+        val repository = repository()
+        val trackingSessionDao = RecordingTrackingSessionDao()
+        composeTestRule.setContent {
+            SettingsScreen(viewModel = SettingsViewModel(repository, trackingSessionDao))
+        }
+
+        composeTestRule
+            .onNodeWithTag(SettingsScreenTestTags.CLEAR_HISTORY_ACTION)
+            .performScrollTo()
+            .performClick()
+        composeTestRule
+            .onNodeWithTag(SettingsScreenTestTags.CLEAR_HISTORY_CANCEL_BUTTON)
+            .performClick()
+
+        composeTestRule.onAllNodesWithTag(SettingsScreenTestTags.CLEAR_HISTORY_CONFIRM_DIALOG).assertCountEquals(0)
+        assertEquals(0, trackingSessionDao.deleteAllCallCount)
+    }
+
+    /** T15 (RF-12, UI-08): confirming the dialog calls `clearHistory()` (and thus `deleteAll()`) exactly once. */
+    @Test
+    fun confirmingClearHistoryDialog_deletesExactlyOnce() {
+        val repository = repository()
+        val trackingSessionDao = RecordingTrackingSessionDao()
+        composeTestRule.setContent {
+            SettingsScreen(viewModel = SettingsViewModel(repository, trackingSessionDao))
+        }
+
+        composeTestRule
+            .onNodeWithTag(SettingsScreenTestTags.CLEAR_HISTORY_ACTION)
+            .performScrollTo()
+            .performClick()
+        composeTestRule
+            .onNodeWithTag(SettingsScreenTestTags.CLEAR_HISTORY_CONFIRM_BUTTON)
+            .performClick()
+
+        composeTestRule.waitUntil(timeoutMillis = 5_000) { trackingSessionDao.deleteAllCallCount == 1 }
+        assertEquals(1, trackingSessionDao.deleteAllCallCount)
     }
 }

@@ -54,6 +54,8 @@ class HistoryListScreenTest {
         startTimestamp = 1_709_596_800_000L,
         endTimestamp = 1_709_596_890_000L,
         status = SessionStatus.FINISHED,
+        locationName = "Praia do Gravatá",
+        distanceMeters = 1_500.0,
     )
 
     /** Reactive/mutable so the delete-flow tests can assert the row disappears after confirming. */
@@ -154,6 +156,58 @@ class HistoryListScreenTest {
             .assertIsDisplayed()
         composeTestRule.onNodeWithText("Duração: 1:30", useUnmergedTree = true).assertIsDisplayed()
         composeTestRule.onAllNodesWithText(sessionId).assertCountEquals(0)
+    }
+
+    /** T14 (UI-01, UI-02, UI-03): location name, distance and the trailing arrow all render. */
+    @Test
+    fun rowShowsLocationNameDistanceAndArrow() {
+        composeTestRule.setContent {
+            HistoryListScreen(
+                viewModel = historyViewModel(),
+                onSessionClick = {},
+            )
+        }
+
+        waitForItem()
+
+        // useUnmergedTree = true: same clickable-row merged-semantics gotcha noted above.
+        composeTestRule.onNodeWithTag(HistoryListScreenTestTags.itemLocationName(sessionId), useUnmergedTree = true)
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithText(session.locationName!!, useUnmergedTree = true).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(HistoryListScreenTestTags.itemDistance(sessionId), useUnmergedTree = true)
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("1.50 km", useUnmergedTree = true).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(HistoryListScreenTestTags.itemArrow(sessionId), useUnmergedTree = true)
+            .assertIsDisplayed()
+    }
+
+    /** T14 (UI-01): a session with no geocoded name shows a non-blank generic placeholder instead. */
+    @Test
+    fun rowShowsGenericPlaceholderWhenLocationNameIsAbsent() {
+        val noLocationSessionId = "history-no-location-session"
+        val noLocationDao = FakeMutableTrackingSessionDao(
+            listOf(
+                session.copy(id = noLocationSessionId, locationName = null),
+            ),
+        )
+        val viewModel = HistoryViewModel(noLocationDao, SettingsRepository(context, "${dataStoreName}_no_location"))
+
+        composeTestRule.setContent {
+            HistoryListScreen(viewModel = viewModel, onSessionClick = {})
+        }
+
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            composeTestRule.onAllNodesWithTag(HistoryListScreenTestTags.item(noLocationSessionId))
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+
+        composeTestRule.onNodeWithTag(
+            HistoryListScreenTestTags.itemLocationName(noLocationSessionId),
+            useUnmergedTree = true,
+        ).assertIsDisplayed()
+        composeTestRule.onNodeWithText(GENERIC_LOCATION_NAME_PLACEHOLDER, useUnmergedTree = true).assertIsDisplayed()
+
+        context.preferencesDataStoreFile("${dataStoreName}_no_location").delete()
     }
 
     @Test

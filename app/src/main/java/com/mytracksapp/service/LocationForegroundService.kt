@@ -18,6 +18,9 @@ import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.mytracksapp.data.local.AppDatabase
 import com.mytracksapp.data.local.entity.SessionStatus
+import com.mytracksapp.data.settings.SettingsRepository
+import com.mytracksapp.domain.geocoding.FirstPointGeocodingCoordinator
+import com.mytracksapp.domain.model.GpsPrecision
 import com.mytracksapp.domain.model.SamplingInterval
 import com.mytracksapp.permission.LocationPermissionManager
 import kotlinx.coroutines.CoroutineScope
@@ -26,6 +29,15 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+
+/**
+ * T07 (RF-05) — pure mapping from the user-configurable [GpsPrecision] preference to the
+ * corresponding Play Services `Priority` constant used to build a session's `LocationRequest`.
+ */
+fun GpsPrecision.toLocationRequestPriority(): Int = when (this) {
+    GpsPrecision.HIGH_ACCURACY -> Priority.PRIORITY_HIGH_ACCURACY
+    GpsPrecision.BALANCED -> Priority.PRIORITY_BALANCED_POWER_ACCURACY
+}
 
 /**
  * Production [LocationSampleSource]: a thin adapter around a real [FusedLocationProviderClient].
@@ -41,12 +53,13 @@ import kotlinx.coroutines.launch
 class FusedLocationSampleSource(
     private val fusedLocationProviderClient: FusedLocationProviderClient,
     private val coroutineScope: CoroutineScope,
+    private val priority: Int = Priority.PRIORITY_HIGH_ACCURACY,
 ) : LocationSampleSource {
 
     private var activeCallback: LocationCallback? = null
 
     override fun start(intervalMillis: Long, onLocation: suspend (LocationSample) -> Unit) {
-        val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, intervalMillis)
+        val request = LocationRequest.Builder(priority, intervalMillis)
             .setMinUpdateIntervalMillis(intervalMillis)
             .build()
 
@@ -109,28 +122,50 @@ class LocationForegroundService : Service() {
             return START_NOT_STICKY
         }
 
+        // RNF-02/T07: startForeground stays the first synchronous call, unconditionally, before any
+        // settings read — never delayed behind a DataStore/coroutine hop (ANR-adjacent risk).
         startForeground(NOTIFICATION_ID, buildNotification())
 
         val database = AppDatabase.getInstance(applicationContext)
         val trackingSessionDao = database.trackingSessionDao()
         val gpsPointDao = database.gpsPointDao()
         val permissionManager = LocationPermissionManager(applicationContext)
-        val fusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(applicationContext)
-        val sampleSource = FusedLocationSampleSource(fusedLocationProviderClient, serviceScope)
-
-        val newCollector = LocationCollector(
-            sessionId = sessionId,
-            interval = interval,
-            gpsPointDao = gpsPointDao,
-            locationSampleSource = sampleSource,
-            isSessionActive = {
-                trackingSessionDao.getSessionById(sessionId).first()?.status == SessionStatus.ACTIVE
-            },
-            isLocationPermissionGranted = permissionManager::isBackgroundLocationGranted,
-        )
-        collector = newCollector
+        val settingsRepository = SettingsRepository(applicationContext)
 
         serviceScope.launch {
+            // RNF-02: gpsPrecision is read exactly once here, per session start, before any
+            // LocationRequest is built for this session — a later in-session preference change
+            // never mutates an already-running session's LocationRequest.
+            val gpsPrecision = settingsRepository.userSettings.first().gpsPrecision
+            val fusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(applicationContext)
+            val sampleSource = FusedLocationSampleSource(
+                fusedLocationProviderClient = fusedLocationProviderClient,
+                coroutineScope = serviceScope,
+                priority = gpsPrecision.toLocationRequestPriority(),
+            )
+
+            val reverseGeocoder = AndroidReverseGeocoder(applicationContext)
+            val geocodingCoordinator = FirstPointGeocodingCoordinator(
+                reverseGeocoder = reverseGeocoder,
+                trackingSessionDao = trackingSessionDao,
+                coroutineScope = serviceScope,
+            )
+
+            val newCollector = LocationCollector(
+                sessionId = sessionId,
+                interval = interval,
+                gpsPointDao = gpsPointDao,
+                locationSampleSource = sampleSource,
+                isSessionActive = {
+                    trackingSessionDao.getSessionById(sessionId).first()?.status == SessionStatus.ACTIVE
+                },
+                isLocationPermissionGranted = permissionManager::isBackgroundLocationGranted,
+                onFirstPointRecorded = { latitude, longitude ->
+                    geocodingCoordinator.onFirstPointRecorded(sessionId, latitude, longitude)
+                },
+            )
+            collector = newCollector
+
             val started = newCollector.start()
             if (!started) {
                 // RF-03: no active session and/or no background location permission — refuse to

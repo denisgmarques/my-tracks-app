@@ -34,16 +34,20 @@ class NewSessionViewModelFactory(
     }
 }
 
-/** [SettingsViewModel] has a single dependency, [SettingsRepository], per this codebase's convention. */
+/**
+ * T12/T13: [SettingsViewModel] also depends on [TrackingSessionDao] now (for `clearHistory()`,
+ * RF-12), alongside its existing [SettingsRepository] dependency.
+ */
 class SettingsViewModelFactory(
     private val settingsRepository: SettingsRepository,
+    private val trackingSessionDao: TrackingSessionDao,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         require(modelClass.isAssignableFrom(SettingsViewModel::class.java)) {
             "Unknown ViewModel class $modelClass"
         }
-        return SettingsViewModel(settingsRepository) as T
+        return SettingsViewModel(settingsRepository, trackingSessionDao) as T
     }
 }
 
@@ -62,15 +66,17 @@ class TrackingViewModelFactory(
     }
 }
 
+/** T11/T13: [HistoryViewModel] also depends on [SettingsRepository] now (unit-aware distance display, RF-13). */
 class HistoryViewModelFactory(
     private val trackingSessionDao: TrackingSessionDao,
+    private val settingsRepository: SettingsRepository,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         require(modelClass.isAssignableFrom(HistoryViewModel::class.java)) {
             "Unknown ViewModel class $modelClass"
         }
-        return HistoryViewModel(trackingSessionDao) as T
+        return HistoryViewModel(trackingSessionDao, settingsRepository) as T
     }
 }
 

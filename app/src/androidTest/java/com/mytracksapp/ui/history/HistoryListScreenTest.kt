@@ -3,6 +3,7 @@ package com.mytracksapp.ui.history
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -10,14 +11,20 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
+import androidx.datastore.preferences.preferencesDataStoreFile
+import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.mytracksapp.data.local.dao.TrackingSessionDao
 import com.mytracksapp.data.local.entity.SessionStatus
 import com.mytracksapp.data.local.entity.TrackingSessionEntity
+import com.mytracksapp.data.settings.SettingsRepository
+import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
+import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -81,17 +88,45 @@ class HistoryListScreenTest {
 
     private val fakeTrackingSessionDao = FakeMutableTrackingSessionDao(listOf(session))
 
+    private val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+    private lateinit var dataStoreName: String
+
+    @Before
+    fun uniqueDataStoreName() {
+        dataStoreName = "test_history_list_screen_settings_${UUID.randomUUID()}"
+    }
+
+    @After
+    fun deleteDataStoreFile() {
+        context.preferencesDataStoreFile(dataStoreName).delete()
+    }
+
+    private fun historyViewModel() = HistoryViewModel(fakeTrackingSessionDao, SettingsRepository(context, dataStoreName))
+
+    /**
+     * [HistoryViewModel] (T11) now combines the sessions flow with [SettingsRepository]'s
+     * `Flow<UserSettings>`, which does its real I/O on DataStore's own dispatcher — the item may
+     * not be in the tree on the very first frame. Waiting for it explicitly (like other
+     * DataStore-backed screens in this suite already do) avoids flaky touch-input injection races.
+     */
+    private fun waitForItem() {
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            composeTestRule.onAllNodesWithTag(HistoryListScreenTestTags.item(sessionId)).fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
     @Test
     fun tappingASessionRowInvokesOnSessionClickWithItsId() {
         var clickedId: String? = null
 
         composeTestRule.setContent {
             HistoryListScreen(
-                viewModel = HistoryViewModel(fakeTrackingSessionDao),
+                viewModel = historyViewModel(),
                 onSessionClick = { clickedId = it },
             )
         }
 
+        waitForItem()
         composeTestRule.onNodeWithTag(HistoryListScreenTestTags.item(sessionId)).performClick()
 
         assertEquals(sessionId, clickedId)
@@ -101,10 +136,12 @@ class HistoryListScreenTest {
     fun rowShowsDurationAndFormattedDateButNeverTheRawSessionId() {
         composeTestRule.setContent {
             HistoryListScreen(
-                viewModel = HistoryViewModel(fakeTrackingSessionDao),
+                viewModel = historyViewModel(),
                 onSessionClick = {},
             )
         }
+
+        waitForItem()
 
         // useUnmergedTree = true: the row's clickable Card merges its descendants' semantics into
         // itself (needed for the click test above to treat the whole row as one target), which
@@ -123,11 +160,12 @@ class HistoryListScreenTest {
     fun swipingLeftThenConfirmingDeletesTheSessionAndRemovesTheRow() {
         composeTestRule.setContent {
             HistoryListScreen(
-                viewModel = HistoryViewModel(fakeTrackingSessionDao),
+                viewModel = historyViewModel(),
                 onSessionClick = {},
             )
         }
 
+        waitForItem()
         composeTestRule.onNodeWithTag(HistoryListScreenTestTags.item(sessionId))
             .performTouchInput { swipeLeft() }
 
@@ -145,11 +183,12 @@ class HistoryListScreenTest {
     fun swipingLeftThenCancellingDoesNotDeleteAndKeepsTheRow() {
         composeTestRule.setContent {
             HistoryListScreen(
-                viewModel = HistoryViewModel(fakeTrackingSessionDao),
+                viewModel = historyViewModel(),
                 onSessionClick = {},
             )
         }
 
+        waitForItem()
         composeTestRule.onNodeWithTag(HistoryListScreenTestTags.item(sessionId))
             .performTouchInput { swipeLeft() }
         composeTestRule.onNodeWithTag(HistoryListScreenTestTags.DELETE_CANCEL_BUTTON).performClick()
@@ -162,11 +201,12 @@ class HistoryListScreenTest {
     fun swipingRightDoesNothing() {
         composeTestRule.setContent {
             HistoryListScreen(
-                viewModel = HistoryViewModel(fakeTrackingSessionDao),
+                viewModel = historyViewModel(),
                 onSessionClick = {},
             )
         }
 
+        waitForItem()
         composeTestRule.onNodeWithTag(HistoryListScreenTestTags.item(sessionId))
             .performTouchInput { swipeRight() }
 

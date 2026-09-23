@@ -2,8 +2,11 @@ package com.mytracksapp.ui.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.mytracksapp.data.local.dao.TrackingSessionDao
 import com.mytracksapp.data.settings.SettingsRepository
 import com.mytracksapp.data.settings.UserSettings
+import com.mytracksapp.domain.export.ExportFormat
+import com.mytracksapp.domain.model.GpsPrecision
 import com.mytracksapp.domain.model.SamplingInterval
 import com.mytracksapp.domain.units.DistanceUnit
 import com.mytracksapp.domain.units.SpeedUnit
@@ -46,6 +49,9 @@ data class SettingsUiState(
     val stopRadiusError: String? = null,
     val stopDurationMinutesText: String = millisToMinutesText(UserSettings().stopDurationMillis),
     val stopDurationError: String? = null,
+    val gpsPrecision: GpsPrecision = UserSettings().gpsPrecision,
+    val keepScreenOnEnabled: Boolean = UserSettings().keepScreenOnEnabled,
+    val defaultExportFormat: ExportFormat = UserSettings().defaultExportFormat,
 )
 
 /**
@@ -59,6 +65,7 @@ data class SettingsUiState(
  */
 class SettingsViewModel(
     private val settingsRepository: SettingsRepository,
+    private val trackingSessionDao: TrackingSessionDao,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -76,6 +83,9 @@ class SettingsViewModel(
                         stopRadiusError = null,
                         stopDurationMinutesText = millisToMinutesText(settings.stopDurationMillis),
                         stopDurationError = null,
+                        gpsPrecision = settings.gpsPrecision,
+                        keepScreenOnEnabled = settings.keepScreenOnEnabled,
+                        defaultExportFormat = settings.defaultExportFormat,
                     )
                 }
             }
@@ -125,5 +135,30 @@ class SettingsViewModel(
         _uiState.update { it.copy(stopDurationError = null) }
         val millis = (minutes * MILLIS_PER_MINUTE).toLong()
         viewModelScope.launch { settingsRepository.setStopDurationMillis(millis) }
+    }
+
+    /** UI-04: persists immediately, no "Save" button — same pattern as the other enum selectors. */
+    fun onGpsPrecisionSelected(precision: GpsPrecision) {
+        viewModelScope.launch { settingsRepository.setGpsPrecision(precision) }
+    }
+
+    /** UI-05: persists immediately, no "Save" button. */
+    fun onKeepScreenOnToggled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setKeepScreenOnEnabled(enabled) }
+    }
+
+    /** UI-07: persists immediately, no "Save" button. */
+    fun onDefaultExportFormatSelected(format: ExportFormat) {
+        viewModelScope.launch { settingsRepository.setDefaultExportFormat(format) }
+    }
+
+    /**
+     * RF-12/UI-08: permanently deletes every tracking session (and, via the DB's cascading
+     * foreign key, every GPS point). The caller (the screen) is responsible for confirming with
+     * the user BEFORE calling this — mirrors [com.mytracksapp.ui.history.HistoryViewModel.deleteSession]'s
+     * existing "caller confirms first" contract; this function itself does not ask again.
+     */
+    fun clearHistory() {
+        viewModelScope.launch { trackingSessionDao.deleteAll() }
     }
 }

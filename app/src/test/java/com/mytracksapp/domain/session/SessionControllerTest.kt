@@ -6,6 +6,7 @@ import com.mytracksapp.data.local.entity.GpsPointEntity
 import com.mytracksapp.data.local.entity.SessionStatus
 import com.mytracksapp.data.local.entity.TrackingSessionEntity
 import com.mytracksapp.domain.model.SamplingInterval
+import com.mytracksapp.domain.stats.StatsEngine
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
@@ -162,6 +163,9 @@ class SessionControllerTest {
         assertEquals(10_000L, stored.endTimestamp)
         // stopped + moving must equal total elapsed time (RF-06 invariant), regardless of split.
         assertEquals(10_000L, stored.stoppedTimeMillis + stored.movingTimeMillis)
+        // T08/RF-13: total distance is persisted from the same points StatsEngine already uses.
+        val points = gpsPointDao.getPointsForSession(sessionId).first()
+        assertEquals(StatsEngine.totalDistanceMeters(points), stored.distanceMeters, 0.0001)
     }
 
     @Test

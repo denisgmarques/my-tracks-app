@@ -241,6 +241,12 @@ class TrackingSessionE2ETest {
         // Points moved a real, non-zero distance -> a finished session with clearly separated
         // points must report a positive average speed.
         assertTrue("average speed should be positive for a session with moving points", finishedSession.averageSpeedMetersPerSecond > 0.0)
+
+        // T08/RF-13: total distance is persisted from the real, final point set, matching an
+        // independent recomputation over the same points read back from the database.
+        val expectedDistanceMeters = StatsEngine.totalDistanceMeters(finalPoints)
+        assertEquals(expectedDistanceMeters, finishedSession.distanceMeters, 0.0001)
+        assertTrue("distance should be positive for a session with moving points", finishedSession.distanceMeters > 0.0)
     }
 
     @Test

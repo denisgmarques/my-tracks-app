@@ -60,7 +60,6 @@ import com.mytracksapp.domain.units.DistanceUnit
 import com.mytracksapp.domain.units.ElapsedTimeFormatter
 import com.mytracksapp.domain.units.SpeedFormatter
 import com.mytracksapp.domain.units.SpeedUnit
-import com.mytracksapp.ui.export.ExportFormatDialog
 import com.mytracksapp.ui.theme.Accent2
 import com.mytracksapp.ui.theme.Accent2800
 import com.mytracksapp.ui.theme.Accent700
@@ -122,6 +121,7 @@ data class SessionDetailUiState(
     val stopLocations: List<StopLocation> = emptyList(),
     val speedUnit: SpeedUnit = SpeedUnit.KMH,
     val distanceUnit: DistanceUnit = DistanceUnit.KM,
+    val defaultExportFormat: ExportFormat = ExportFormat.GPX,
     val isLoaded: Boolean = false,
 ) {
     /** UI-05/RF-08: the export action is only ever available for a session with status "encerrada". */
@@ -188,6 +188,7 @@ class SessionDetailViewModel(
                             stopLocations = classification.stopLocations,
                             speedUnit = settings.speedUnit,
                             distanceUnit = settings.distanceUnit,
+                            defaultExportFormat = settings.defaultExportFormat,
                             isLoaded = true,
                         )
                     }
@@ -196,7 +197,7 @@ class SessionDetailViewModel(
     }
 }
 
-/** Stable test tags for [SessionDetailScreen], used by SessionDetailScreenTest (UI-03) and ExportFormatDialogTest (UI-05). */
+/** Stable test tags for [SessionDetailScreen], used by SessionDetailScreenTest (UI-03) and SessionDetailExportTest (RF-11). */
 object SessionDetailScreenTestTags {
     const val SCREEN = "session_detail_screen"
     const val AVERAGE_SPEED = "session_detail_average_speed"
@@ -224,11 +225,15 @@ private val MapExpandedHeight = 420.dp
  * route — no camera-follow logic is needed here beyond [MapComponent]'s existing bounds-fit,
  * which already frames a static list (route + pins) just as well as a live-growing one.
  *
- * T12/UI-05: also exposes an export action, visible ONLY when the session's status is
- * [SessionStatus.FINISHED] ("encerrada"). Triggering it shows [ExportFormatDialog]'s GPX/CSV
- * picker; picking either format invokes [onExport] with `(sessionId, format)` — production callers
- * wire this to `ExportService::export` (RF-08), e.g. `{ id, format -> exportService.export(id, format) }`.
+ * T10/RF-11: also exposes an export action, visible ONLY when the session's status is
+ * [SessionStatus.FINISHED] ("encerrada"). Triggering it exports DIRECTLY, with no format-picker
+ * dialog in this per-session path: it invokes [onExport] with `(sessionId, uiState.defaultExportFormat)`
+ * — the currently configured default export format (see [SessionDetailUiState.defaultExportFormat],
+ * read reactively from [SettingsRepository]) — production callers wire this to
+ * `ExportService::export` (RF-11), e.g. `{ id, format -> exportService.export(id, format) }`.
  * Defaults to a no-op so existing callers/tests that don't care about export keep compiling.
+ * [com.mytracksapp.ui.export.ExportFormatDialog] is kept in the codebase as a standalone,
+ * unwired composable (PLAN.md's Open Questions) but is never shown from this screen anymore.
  *
  * [onPolylineApplied]/[onMarkersApplied] are optional test seams forwarded verbatim to
  * [MapComponent]; production callers never set them (see [MapComponent]'s doc for why).
@@ -284,7 +289,6 @@ fun SessionDetailScreen(
     onMarkersApplied: (List<LatLng>) -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var showExportDialog by rememberSaveable { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
 
     Column(
@@ -318,7 +322,9 @@ fun SessionDetailScreen(
                 ) {
                     if (uiState.isExportAvailable) {
                         OutlinedButton(
-                            onClick = { showExportDialog = true },
+                            onClick = {
+                                coroutineScope.launch { onExport(uiState.sessionId, uiState.defaultExportFormat) }
+                            },
                             shape = PillShape,
                             modifier = Modifier
                                 .height(44.dp)
@@ -425,16 +431,6 @@ fun SessionDetailScreen(
                 }
             }
         }
-    }
-
-    if (showExportDialog) {
-        ExportFormatDialog(
-            onDismissRequest = { showExportDialog = false },
-            onFormatSelected = { format ->
-                showExportDialog = false
-                coroutineScope.launch { onExport(uiState.sessionId, format) }
-            },
-        )
     }
 }
 

@@ -309,6 +309,7 @@ fun MyTracksApp(
                 composable(Routes.HISTORY) {
                     HistoryRoute(
                         trackingSessionDao = trackingSessionDao,
+                        settingsRepository = settingsRepository,
                         onSessionClick = { sessionId -> navController.navigate(Routes.sessionDetail(sessionId)) },
                     )
                 }
@@ -328,7 +329,7 @@ fun MyTracksApp(
                 }
 
                 composable(Routes.SETTINGS) {
-                    SettingsRoute(settingsRepository = settingsRepository)
+                    SettingsRoute(settingsRepository = settingsRepository, trackingSessionDao = trackingSessionDao)
                 }
             }
         }
@@ -422,10 +423,11 @@ private fun TrackingRoute(
 @Composable
 private fun HistoryRoute(
     trackingSessionDao: TrackingSessionDao,
+    settingsRepository: SettingsRepository,
     onSessionClick: (String) -> Unit,
 ) {
     val viewModel: HistoryViewModel = viewModel(
-        factory = HistoryViewModelFactory(trackingSessionDao),
+        factory = HistoryViewModelFactory(trackingSessionDao, settingsRepository),
     )
 
     HistoryListScreen(viewModel = viewModel, onSessionClick = onSessionClick)
@@ -454,9 +456,9 @@ private fun SessionDetailRoute(
 }
 
 @Composable
-private fun SettingsRoute(settingsRepository: SettingsRepository) {
+private fun SettingsRoute(settingsRepository: SettingsRepository, trackingSessionDao: TrackingSessionDao) {
     val viewModel: SettingsViewModel = viewModel(
-        factory = SettingsViewModelFactory(settingsRepository),
+        factory = SettingsViewModelFactory(settingsRepository, trackingSessionDao),
     )
 
     SettingsScreen(viewModel = viewModel)

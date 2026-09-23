@@ -101,6 +101,92 @@ class SessionDetailScreenTest {
         override suspend fun countForSession(sessionId: String): Int = points.size
     }
 
+    /** In-memory [TrackingSessionDao] double whose single session's [status] is configurable per test (T10). */
+    private class StatusConfigurableTrackingSessionDao(sessionId: String, status: SessionStatus) : TrackingSessionDao {
+        private val session = TrackingSessionEntity(
+            id = sessionId,
+            samplingIntervalSeconds = 10,
+            startTimestamp = 0L,
+            endTimestamp = if (status == SessionStatus.FINISHED) 20_000L else null,
+            status = status,
+        )
+
+        override suspend fun insert(session: TrackingSessionEntity) = Unit
+        override suspend fun update(session: TrackingSessionEntity) = Unit
+        override fun getSessionById(sessionId: String): Flow<TrackingSessionEntity?> = flowOf(session)
+        override fun getAllSessions(): Flow<List<TrackingSessionEntity>> = flowOf(listOf(session))
+        override fun getSessionsByStatus(status: SessionStatus): Flow<List<TrackingSessionEntity>> =
+            flowOf(listOf(session).filter { it.status == status })
+        override suspend fun deleteById(sessionId: String) = Unit
+        override suspend fun deleteAll() = Unit
+        override suspend fun updateLocationName(sessionId: String, locationName: String?) = Unit
+    }
+
+    /** In-memory [GpsPointDao] double with a couple of fixed points for a session (T10). */
+    private class FixedGpsPointDao(sessionId: String) : GpsPointDao {
+        private val points = listOf(
+            GpsPointEntity(sessionId = sessionId, timestamp = 0L, latitude = 0.0, longitude = 0.0, accuracy = 5f),
+            GpsPointEntity(sessionId = sessionId, timestamp = 10_000L, latitude = 0.001, longitude = 0.0, accuracy = 5f),
+            GpsPointEntity(sessionId = sessionId, timestamp = 20_000L, latitude = 0.002, longitude = 0.0, accuracy = 5f),
+        )
+
+        override suspend fun insert(point: GpsPointEntity): Long = 0L
+        override suspend fun insertAll(points: List<GpsPointEntity>): List<Long> = emptyList()
+        override fun getPointsForSession(sessionId: String): Flow<List<GpsPointEntity>> = flowOf(points)
+        override suspend fun countForSession(sessionId: String): Int = points.size
+    }
+
+    /**
+     * T10 — moved from `ExportFormatDialogTest` (which no longer references [SessionDetailScreen]
+     * at all): the export action's visibility is purely a function of the session's status, unrelated
+     * to any dialog.
+     */
+    @Test
+    fun exportActionIsHiddenForAnActiveNonFinishedSession() {
+        val activeSessionId = "active-session"
+        val viewModel = SessionDetailViewModel(
+            activeSessionId,
+            StatusConfigurableTrackingSessionDao(activeSessionId, SessionStatus.ACTIVE),
+            FixedGpsPointDao(activeSessionId),
+            settingsRepository(),
+        )
+
+        composeTestRule.setContent {
+            SessionDetailScreen(viewModel = viewModel)
+        }
+
+        composeTestRule
+            .onAllNodesWithTag(SessionDetailScreenTestTags.EXPORT_ACTION)
+            .assertCountEquals(0)
+    }
+
+    /** T10 — moved from `ExportFormatDialogTest` (see [exportActionIsHiddenForAnActiveNonFinishedSession]'s doc). */
+    @Test
+    fun exportActionIsVisibleForAFinishedSession() {
+        val finishedSessionId = "finished-session"
+        val viewModel = SessionDetailViewModel(
+            finishedSessionId,
+            StatusConfigurableTrackingSessionDao(finishedSessionId, SessionStatus.FINISHED),
+            FixedGpsPointDao(finishedSessionId),
+            settingsRepository(),
+        )
+
+        composeTestRule.setContent {
+            SessionDetailScreen(viewModel = viewModel)
+        }
+
+        // SessionDetailScreen renders nothing until its ViewModel's first real Flow emission
+        // lands (isLoaded) — see SessionDetailScreen's class doc — so the export action only
+        // exists once that's happened, not merely once composition starts.
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            composeTestRule.onAllNodesWithTag(SessionDetailScreenTestTags.EXPORT_ACTION).fetchSemanticsNodes().isNotEmpty()
+        }
+
+        composeTestRule
+            .onNodeWithTag(SessionDetailScreenTestTags.EXPORT_ACTION)
+            .assertIsDisplayed()
+    }
+
     @Test
     fun allFiveMetricsAreVisibleSimultaneouslyWithNoExtraNavigationAndNoSessionIdOrInstantSpeed() {
         composeTestRule.setContent {

@@ -109,6 +109,7 @@ class SessionControllerImpl(
 
         val classification = SegmentClassifier.classify(points)
         val averageSpeed = StatsEngine.averageSpeedMetersPerSecond(points)
+        val distanceMeters = StatsEngine.totalDistanceMeters(points)
         val endTimestamp = if (points.isNotEmpty()) points.last().timestamp else clock()
 
         trackingSessionDao.update(
@@ -118,6 +119,7 @@ class SessionControllerImpl(
                 stoppedTimeMillis = classification.stoppedTimeMillis,
                 movingTimeMillis = classification.movingTimeMillis,
                 averageSpeedMetersPerSecond = averageSpeed,
+                distanceMeters = distanceMeters,
             ),
         )
     }

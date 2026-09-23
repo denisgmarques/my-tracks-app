@@ -11,13 +11,18 @@ import androidx.compose.ui.test.performTextInput
 import androidx.datastore.preferences.preferencesDataStoreFile
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.mytracksapp.data.local.dao.TrackingSessionDao
+import com.mytracksapp.data.local.entity.SessionStatus
+import com.mytracksapp.data.local.entity.TrackingSessionEntity
 import com.mytracksapp.data.settings.SettingsRepository
 import com.mytracksapp.data.settings.UserSettings
 import com.mytracksapp.domain.model.SamplingInterval
 import com.mytracksapp.domain.units.DistanceUnit
 import com.mytracksapp.domain.units.SpeedUnit
 import java.util.UUID
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -56,11 +61,30 @@ class SettingsScreenTest {
 
     private fun repository() = SettingsRepository(context, dataStoreName)
 
+    /**
+     * T12 — [SettingsViewModel] now also takes a [TrackingSessionDao] (for [SettingsViewModel.clearHistory],
+     * UI-08). This test file predates that control (still T15's job); a no-op fake keeps every
+     * pre-existing test here compiling and passing unmodified.
+     */
+    private class NoOpTrackingSessionDao : TrackingSessionDao {
+        override suspend fun insert(session: TrackingSessionEntity) = Unit
+        override suspend fun update(session: TrackingSessionEntity) = Unit
+        override fun getSessionById(sessionId: String): Flow<TrackingSessionEntity?> = flowOf(null)
+        override fun getAllSessions(): Flow<List<TrackingSessionEntity>> = flowOf(emptyList())
+        override fun getSessionsByStatus(status: SessionStatus): Flow<List<TrackingSessionEntity>> = flowOf(emptyList())
+        override suspend fun deleteById(sessionId: String) = Unit
+        override suspend fun deleteAll() = Unit
+        override suspend fun updateLocationName(sessionId: String, locationName: String?) = Unit
+    }
+
+    private fun settingsViewModel(repository: SettingsRepository) =
+        SettingsViewModel(repository, NoOpTrackingSessionDao())
+
     @Test
     fun selectingSamplingInterval_persistsViaRepository() {
         val repository = repository()
         composeTestRule.setContent {
-            SettingsScreen(viewModel = SettingsViewModel(repository))
+            SettingsScreen(viewModel = settingsViewModel(repository))
         }
 
         composeTestRule
@@ -77,7 +101,7 @@ class SettingsScreenTest {
     fun selectingSpeedUnit_persistsViaRepository() {
         val repository = repository()
         composeTestRule.setContent {
-            SettingsScreen(viewModel = SettingsViewModel(repository))
+            SettingsScreen(viewModel = settingsViewModel(repository))
         }
 
         composeTestRule
@@ -94,7 +118,7 @@ class SettingsScreenTest {
     fun selectingDistanceUnit_persistsViaRepository() {
         val repository = repository()
         composeTestRule.setContent {
-            SettingsScreen(viewModel = SettingsViewModel(repository))
+            SettingsScreen(viewModel = settingsViewModel(repository))
         }
 
         composeTestRule
@@ -111,7 +135,7 @@ class SettingsScreenTest {
     fun committingValidStopRadius_persistsAsMeters() {
         val repository = repository()
         composeTestRule.setContent {
-            SettingsScreen(viewModel = SettingsViewModel(repository))
+            SettingsScreen(viewModel = settingsViewModel(repository))
         }
 
         composeTestRule
@@ -134,7 +158,7 @@ class SettingsScreenTest {
     fun committingInvalidStopRadius_showsError_andDoesNotPersist() {
         val repository = repository()
         composeTestRule.setContent {
-            SettingsScreen(viewModel = SettingsViewModel(repository))
+            SettingsScreen(viewModel = settingsViewModel(repository))
         }
 
         composeTestRule
@@ -161,7 +185,7 @@ class SettingsScreenTest {
     fun committingValidStopDurationMinutes_persistsAsMillis() {
         val repository = repository()
         composeTestRule.setContent {
-            SettingsScreen(viewModel = SettingsViewModel(repository))
+            SettingsScreen(viewModel = settingsViewModel(repository))
         }
 
         composeTestRule
@@ -184,7 +208,7 @@ class SettingsScreenTest {
     fun committingInvalidStopDuration_showsError_andDoesNotPersist() {
         val repository = repository()
         composeTestRule.setContent {
-            SettingsScreen(viewModel = SettingsViewModel(repository))
+            SettingsScreen(viewModel = settingsViewModel(repository))
         }
 
         composeTestRule

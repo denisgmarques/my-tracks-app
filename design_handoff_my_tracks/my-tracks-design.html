@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/organic-8874105f-b89f-4dd0-86f1-3d525b34296b/styles.css">
+<script src="_ds/organic-8874105f-b89f-4dd0-86f1-3d525b34296b/_ds_bundle.js"></script>
+<style>body{margin:0;background:var(--color-surface);font-family:var(--font-body);color:var(--color-text)}a{color:var(--color-accent-700)}a:hover{color:var(--color-accent-800)}</style>
+</helmet>
+<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:32px 16px;box-sizing:border-box">
+  <div data-screen-label="Sessão" style="width:390px;height:844px;background:var(--color-bg);border-radius:48px;box-shadow:var(--shadow-lg);overflow:hidden;display:flex;flex-direction:column;position:relative">
+    <div style="height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 28px;font-size:14px;font-weight:600">
+      <span>12:19</span><span style="font-size:12px">100%</span>
+    </div>
+
+    <header style="display:flex;align-items:center;justify-content:space-between;padding:8px 20px 0 20px">
+      <button class="btn btn-ghost btn-icon" aria-label="Menu" style="width:44px;height:44px;border-radius:999px">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h10"></path></svg>
+      </button>
+      <button class="btn btn-secondary" style="height:44px;border-radius:999px;display:flex;align-items:center;gap:8px;padding:0 18px">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"></path></svg>
+        Exportar
+      </button>
+    </header>
+
+    <main style="flex:1;overflow:auto;padding:16px 24px 0 24px;display:flex;flex-direction:column;gap:20px">
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <span style="font-size:14px;color:var(--color-neutral-700)">Hoje · Praia do Gravatá</span>
+        <h1 style="margin:0;font-family:var(--font-heading);font-weight:400;font-size:24px;line-height:1.1">My Tracks</h1>
+      </div>
+
+      <section style="display:flex;align-items:flex-end;gap:12px">
+        <div style="flex:1;display:flex;flex-direction:column;gap:4px">
+          <span style="font-size:14px;font-weight:600;color:var(--color-neutral-700)">Distância total</span>
+          <div style="display:flex;align-items:baseline;gap:8px">
+            <span style="font-family:var(--font-heading);font-size:48px;line-height:1;color:var(--color-accent-700)">3,99</span>
+            <span style="font-size:18px;font-weight:600">km</span>
+          </div>
+        </div>
+        <sc-if value="{{ isCollecting }}" hint-placeholder-val="{{ true }}">
+          <div style="flex:1;background:var(--color-accent-2-100);border-radius:var(--radius-lg);padding:14px 16px;display:flex;flex-direction:column;gap:2px">
+            <div style="display:flex;align-items:center;gap:6px">
+              <span style="width:8px;height:8px;border-radius:999px;background:var(--color-accent-2-700)"></span>
+              <span style="font-size:12px;font-weight:600;color:var(--color-accent-2-900)">Velocidade instantânea</span>
+            </div>
+            <span style="font-size:24px;font-weight:700;color:var(--color-accent-2-900)">5,20 <span style="font-size:13px;font-weight:600">km/h</span></span>
+          </div>
+        </sc-if>
+      </section>
+
+      <section style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div style="background:var(--color-surface);border-radius:var(--radius-lg);padding:16px 18px;display:flex;flex-direction:column;gap:4px">
+          <span style="font-size:13px;font-weight:600;color:var(--color-neutral-700)">Velocidade média</span>
+          <span style="font-size:24px;font-weight:700">4,86 <span style="font-size:14px;font-weight:600">km/h</span></span>
+        </div>
+        <div style="background:var(--color-surface);border-radius:var(--radius-lg);padding:16px 18px;display:flex;flex-direction:column;gap:4px">
+          <span style="font-size:13px;font-weight:600;color:var(--color-neutral-700)">Tempo total</span>
+          <span style="font-size:24px;font-weight:700">49:16</span>
+        </div>
+      </section>
+
+      <section style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;height:14px;border-radius:999px;overflow:hidden;gap:4px">
+          <div style="width:75.7%;background:var(--color-accent-2);border-radius:999px"></div>
+          <div style="flex:1;background:var(--color-neutral-300);border-radius:999px"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:14px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="width:10px;height:10px;border-radius:999px;background:var(--color-accent-2)"></span>
+            <span>Em movimento <strong>37:17</strong></span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="width:10px;height:10px;border-radius:999px;background:var(--color-neutral-400)"></span>
+            <span>Parado <strong>11:58</strong></span>
+          </div>
+        </div>
+      </section>
+
+      <section style="position:relative;border-radius:var(--radius-lg);overflow:hidden;background:var(--color-neutral-200);flex-shrink:0;height:{{ mapH }}">
+        <svg viewBox="0 0 342 240" preserveAspectRatio="xMidYMid slice" style="position:absolute;inset:0;width:100%;height:100%">
+          <path d="M250 -10 C 230 60, 215 120, 200 160 S 160 230, 150 260 L 360 260 L 360 -10 Z" fill="var(--color-accent-2-200)"></path>
+          <g stroke="var(--color-neutral-100)" stroke-width="3" fill="none">
+            <path d="M0 40 L240 60 M0 90 L225 105 M0 140 L205 150 M0 190 L175 200 M40 0 L25 240 M90 0 L78 240 M140 0 L130 240 M190 0 L182 180"></path>
+          </g>
+          <path d="M36 110 L100 110 L103 97 L120 96 L125 58 L185 64 L205 50 L228 40 L230 62 M185 64 L160 130 L130 130 L128 136 L40 125 Z" fill="none" stroke="var(--color-accent)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"></path>
+          <circle cx="36" cy="117" r="9" fill="var(--color-accent-2-700)" stroke="var(--color-bg)" stroke-width="4"></circle>
+          <circle cx="228" cy="40" r="9" fill="var(--color-accent-700)" stroke="var(--color-bg)" stroke-width="4"></circle>
+        </svg>
+        <div style="position:absolute;left:12px;top:12px;display:flex;gap:6px">
+          <span class="tag tag-accent-2" style="background:var(--color-bg)">Início</span>
+          <span class="tag tag-accent" style="background:var(--color-bg)">Fim</span>
+        </div>
+        <button class="btn btn-icon" onClick="{{ toggleMap }}" aria-label="Expandir mapa" style="position:absolute;right:12px;top:12px;width:44px;height:44px;border-radius:999px;background:var(--color-bg);box-shadow:var(--shadow-md)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"></path></svg>
+        </button>
+      </section>
+      <div style="height:8px;flex-shrink:0"></div>
+    </main>
+
+    <footer style="padding:16px 24px 28px 24px;display:flex;gap:12px;background:var(--color-bg)">
+      <button class="btn btn-secondary" style="flex:1;height:56px;border-radius:999px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:16px">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l3 2"></path></svg>
+        Histórico
+      </button>
+      <button class="btn btn-primary" style="flex:1.4;height:56px;border-radius:999px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:16px">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2.75" stroke-linejoin="round"><path d="M7 4l13 8-13 8z"></path></svg>
+        Nova sessão
+      </button>
+    </footer>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { big: false, isCollecting: true };
+  renderVals() {
+    return {
+      mapH: this.state.big ? '420px' : '220px',
+      toggleMap: () => this.setState(s => ({ big: !s.big })),
+      isCollecting: this.state.isCollecting
+    };
+  }
+}
+</script>
+</body>
+</html>

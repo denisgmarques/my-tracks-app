@@ -3,7 +3,6 @@ package com.mytracksapp
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
@@ -14,6 +13,7 @@ import com.mytracksapp.domain.session.SessionControllerImpl
 import com.mytracksapp.permission.LocationPermissionManager
 import com.mytracksapp.service.LocationForegroundServiceController
 import com.mytracksapp.ui.navigation.MyTracksApp
+import com.mytracksapp.ui.theme.MyTracksTheme
 
 /**
  * Follow-up "wire it all together" task: the original PLAN.md phases (T01-T13) each shipped a
@@ -50,7 +50,7 @@ class MainActivity : ComponentActivity() {
         val settingsRepository = SettingsRepository(applicationContext)
 
         setContent {
-            MaterialTheme {
+            MyTracksTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     MyTracksApp(
                         trackingSessionDao = trackingSessionDao,

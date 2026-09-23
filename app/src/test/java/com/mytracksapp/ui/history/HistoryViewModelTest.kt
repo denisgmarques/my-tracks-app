@@ -33,7 +33,7 @@ private class FakeTrackingSessionDao(private val allSessions: List<TrackingSessi
 
 /**
  * T10 — [HistoryViewModel] unit test (UI-04): finished sessions are mapped to
- * [HistoryListItem]s carrying the 3 minimum required fields (id, start date/time, interval).
+ * [HistoryListItem]s carrying id (for navigation), start date, and trip duration.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class HistoryViewModelTest {
@@ -86,12 +86,13 @@ class HistoryViewModelTest {
 
         val first = items.first { it.sessionId == "finished-1" }
         assertEquals(1_700_000_000_000L, first.startTimestamp)
-        assertEquals(15, first.samplingIntervalSeconds)
-        assertTrue(first.formattedStartDateTime.isNotBlank())
+        assertEquals(60_000L, first.durationMillis)
+        assertTrue(first.formattedStartDate.isNotBlank())
+        assertEquals("1:00", first.formattedDuration)
 
         val second = items.first { it.sessionId == "finished-2" }
         assertEquals(1_700_001_000_000L, second.startTimestamp)
-        assertEquals(60, second.samplingIntervalSeconds)
+        assertEquals(500_000L, second.durationMillis)
     }
 
     @Test

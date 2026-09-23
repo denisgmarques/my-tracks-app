@@ -1,5 +1,6 @@
 package com.mytracksapp.ui.history
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -23,15 +24,16 @@ object HistoryListScreenTestTags {
     const val EMPTY_MESSAGE = "history_empty_message"
 
     fun item(sessionId: String): String = "history_item_$sessionId"
-    fun itemInterval(sessionId: String): String = "history_item_interval_$sessionId"
-    fun itemStartDateTime(sessionId: String): String = "history_item_start_$sessionId"
+    fun itemDuration(sessionId: String): String = "history_item_duration_$sessionId"
+    fun itemStartDate(sessionId: String): String = "history_item_start_$sessionId"
 }
 
 /**
- * Past-sessions list (T10, UI-04): every finished session appears with its id, start date/time
- * and configured sampling interval — the 3 fields UI-04 requires at minimum. Tapping a row is
- * expected to navigate to [SessionDetailScreen] for that session id (wiring left to the caller's
- * navigation setup).
+ * Past-sessions list (T10, UI-04): every finished session appears with its start date and trip
+ * duration — the raw session id is intentionally not rendered (meaningless to a human scanning
+ * their trips) and the raw sampling-interval count was replaced by duration per developer
+ * feedback. Tapping a row calls [onSessionClick] with that session's id, which the caller wires
+ * to navigation into [SessionDetailScreen].
  */
 @Composable
 fun HistoryListScreen(
@@ -62,17 +64,18 @@ fun HistoryListScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(8.dp)
-                        .testTag(HistoryListScreenTestTags.item(item.sessionId)),
+                        .testTag(HistoryListScreenTestTags.item(item.sessionId))
+                        .clickable { onSessionClick(item.sessionId) },
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
-                        Text(text = item.sessionId, style = MaterialTheme.typography.titleSmall)
                         Text(
-                            text = item.formattedStartDateTime,
-                            modifier = Modifier.testTag(HistoryListScreenTestTags.itemStartDateTime(item.sessionId)),
+                            text = item.formattedStartDate,
+                            style = MaterialTheme.typography.titleSmall,
+                            modifier = Modifier.testTag(HistoryListScreenTestTags.itemStartDate(item.sessionId)),
                         )
                         Text(
-                            text = "Intervalo: ${item.samplingIntervalSeconds}s",
-                            modifier = Modifier.testTag(HistoryListScreenTestTags.itemInterval(item.sessionId)),
+                            text = "Duração: ${item.formattedDuration}",
+                            modifier = Modifier.testTag(HistoryListScreenTestTags.itemDuration(item.sessionId)),
                         )
                     }
                 }

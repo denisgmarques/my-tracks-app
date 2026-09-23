@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.mytracksapp.data.local.dao.TrackingSessionDao
 import com.mytracksapp.data.local.entity.SessionStatus
 import com.mytracksapp.data.local.entity.TrackingSessionEntity
+import com.mytracksapp.domain.units.ElapsedTimeFormatter
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -15,27 +16,34 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * One row of the past-sessions list (UI-04): the 3 minimum required fields — id, start
- * date/time, configured sampling interval — plus a display-ready formatted date/time string.
+ * One row of the past-sessions list (UI-04): [sessionId] is kept for navigation (tapping a row)
+ * but deliberately NOT rendered in [HistoryListScreen] — a raw UUID is not meaningful to a human
+ * scanning their trip history. The row shows the start date and the trip's total duration instead
+ * of the raw sampling-interval count, per the developer's explicit UX feedback.
  */
 data class HistoryListItem(
     val sessionId: String,
     val startTimestamp: Long,
-    val samplingIntervalSeconds: Int,
+    val durationMillis: Long,
 ) {
-    /** Human-readable start date/time, derived from [startTimestamp] in the device's zone. */
-    val formattedStartDateTime: String
-        get() = DISPLAY_FORMATTER.format(Instant.ofEpochMilli(startTimestamp).atZone(ZoneId.systemDefault()))
+    /** Start date only (no time-of-day), per the developer's requested `DD/MM/YYYY` format. */
+    val formattedStartDate: String
+        get() = DISPLAY_DATE_FORMATTER.format(Instant.ofEpochMilli(startTimestamp).atZone(ZoneId.systemDefault()))
+
+    /** Total trip duration (`mm:ss` / `h:mm:ss`), replacing the raw sampling-interval display. */
+    val formattedDuration: String
+        get() = ElapsedTimeFormatter.format(durationMillis)
 
     private companion object {
-        val DISPLAY_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+        val DISPLAY_DATE_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy")
     }
 }
 
 private fun TrackingSessionEntity.toHistoryListItem(): HistoryListItem = HistoryListItem(
     sessionId = id,
     startTimestamp = startTimestamp,
-    samplingIntervalSeconds = samplingIntervalSeconds,
+    // endTimestamp is always non-null here: this list is scoped to FINISHED sessions only.
+    durationMillis = (endTimestamp ?: startTimestamp) - startTimestamp,
 )
 
 /** UI state for [HistoryListScreen]. */

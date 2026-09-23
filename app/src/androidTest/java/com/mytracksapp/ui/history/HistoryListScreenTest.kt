@@ -1,0 +1,94 @@
+package com.mytracksapp.ui.history
+
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.mytracksapp.data.local.dao.TrackingSessionDao
+import com.mytracksapp.data.local.entity.SessionStatus
+import com.mytracksapp.data.local.entity.TrackingSessionEntity
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
+import org.junit.Assert.assertEquals
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+
+/**
+ * Regression test for a real bug found on-device: [HistoryListScreen]'s row `Card` had no
+ * `clickable` modifier at all, so tapping a session in the history list did nothing — the
+ * `onSessionClick` callback was accepted as a parameter but never invoked anywhere. This test
+ * exercises the actual tap, not just that the callback exists.
+ *
+ * Also covers the developer's follow-up display feedback: the raw session id is no longer shown,
+ * the row shows the trip's duration instead of the raw sampling interval, and the date renders as
+ * `DD/MM/YYYY`.
+ */
+@RunWith(AndroidJUnit4::class)
+class HistoryListScreenTest {
+
+    @get:Rule
+    val composeTestRule = createComposeRule()
+
+    private val sessionId = "history-click-test-session"
+
+    private val fakeTrackingSessionDao = object : TrackingSessionDao {
+        private val session = TrackingSessionEntity(
+            id = sessionId,
+            samplingIntervalSeconds = 15,
+            // 2024-03-05T00:00:00Z, ends 90s later — deterministic, timezone-independent date.
+            startTimestamp = 1_709_596_800_000L,
+            endTimestamp = 1_709_596_890_000L,
+            status = SessionStatus.FINISHED,
+        )
+
+        override suspend fun insert(session: TrackingSessionEntity) = Unit
+        override suspend fun update(session: TrackingSessionEntity) = Unit
+        override fun getSessionById(sessionId: String): Flow<TrackingSessionEntity?> = flowOf(session)
+        override fun getAllSessions(): Flow<List<TrackingSessionEntity>> = flowOf(listOf(session))
+        override fun getSessionsByStatus(status: SessionStatus): Flow<List<TrackingSessionEntity>> =
+            flowOf(listOf(session))
+    }
+
+    @Test
+    fun tappingASessionRowInvokesOnSessionClickWithItsId() {
+        var clickedId: String? = null
+
+        composeTestRule.setContent {
+            HistoryListScreen(
+                viewModel = HistoryViewModel(fakeTrackingSessionDao),
+                onSessionClick = { clickedId = it },
+            )
+        }
+
+        composeTestRule.onNodeWithTag(HistoryListScreenTestTags.item(sessionId)).performClick()
+
+        assertEquals(sessionId, clickedId)
+    }
+
+    @Test
+    fun rowShowsDurationAndFormattedDateButNeverTheRawSessionId() {
+        composeTestRule.setContent {
+            HistoryListScreen(
+                viewModel = HistoryViewModel(fakeTrackingSessionDao),
+                onSessionClick = {},
+            )
+        }
+
+        // useUnmergedTree = true: the row's clickable Card merges its descendants' semantics into
+        // itself (needed for the click test above to treat the whole row as one target), which
+        // makes the child Text nodes' own testTags fail a MERGED-tree lookup even though they're
+        // genuinely on screen — a well-known Compose-testing gotcha for anything inside a
+        // clickable container.
+        composeTestRule.onNodeWithTag(HistoryListScreenTestTags.itemStartDate(sessionId), useUnmergedTree = true)
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithTag(HistoryListScreenTestTags.itemDuration(sessionId), useUnmergedTree = true)
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("Duração: 1:30", useUnmergedTree = true).assertIsDisplayed()
+        composeTestRule.onAllNodesWithText(sessionId).assertCountEquals(0)
+    }
+}

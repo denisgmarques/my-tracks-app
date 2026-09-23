@@ -3,6 +3,7 @@ package com.mytracksapp.ui.history
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.datastore.preferences.preferencesDataStoreFile
@@ -106,6 +107,16 @@ class SessionDetailScreenTest {
             )
         }
 
+        // The screen intentionally renders nothing until its ViewModel's first real Flow
+        // emission lands (SessionDetailUiState.isLoaded) — this avoids a first-frame flash where
+        // elements gated on placeholder defaults (e.g. the export button, the Início/Fim map
+        // tags) would briefly render in the wrong state. The settings DataStore Flow this depends
+        // on reads from disk asynchronously, so this wait is a genuine (not flaky) requirement,
+        // not a timing workaround.
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            composeTestRule.onAllNodesWithTag(SessionDetailScreenTestTags.TOTAL_DISTANCE).fetchSemanticsNodes().isNotEmpty()
+        }
+
         composeTestRule.onNodeWithTag(SessionDetailScreenTestTags.AVERAGE_SPEED).assertIsDisplayed()
         composeTestRule.onNodeWithTag(SessionDetailScreenTestTags.TOTAL_DISTANCE).assertIsDisplayed()
         composeTestRule.onNodeWithTag(SessionDetailScreenTestTags.ELAPSED_TIME).assertIsDisplayed()
@@ -125,6 +136,9 @@ class SessionDetailScreenTest {
             )
         }
 
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            composeTestRule.onAllNodesWithTag(MapComponentTestTags.MAP_VIEW).fetchSemanticsNodes().isNotEmpty()
+        }
         composeTestRule.onNodeWithTag(MapComponentTestTags.MAP_VIEW).assertIsDisplayed()
         composeTestRule.waitUntil(timeoutMillis = 5_000) {
             appliedPolylines.isNotEmpty() && appliedPolylines.last().size == 3

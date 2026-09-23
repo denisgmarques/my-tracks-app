@@ -12,7 +12,156 @@
 <script src="_ds/organic-8874105f-b89f-4dd0-86f1-3d525b34296b/_ds_bundle.js"></script>
 <style>body{margin:0;background:var(--color-surface);font-family:var(--font-body);color:var(--color-text)}a{color:var(--color-accent-700)}a:hover{color:var(--color-accent-800)}</style>
 </helmet>
-<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:32px 16px;box-sizing:border-box">
+<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;gap:32px;padding:32px 16px;box-sizing:border-box;flex-wrap:wrap">
+  <div data-screen-label="Histórico" style="width:390px;height:844px;background:var(--color-bg);border-radius:48px;box-shadow:var(--shadow-lg);overflow:hidden;display:flex;flex-direction:column;position:relative">
+    <div style="height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 28px;font-size:14px;font-weight:600">
+      <span>13:15</span><span style="font-size:12px">100%</span>
+    </div>
+    <header style="display:flex;align-items:center;gap:14px;padding:8px 24px 0 20px">
+      <button class="btn btn-ghost btn-icon" aria-label="Menu" style="width:44px;height:44px;border-radius:999px">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h10"></path></svg>
+      </button>
+      <h1 style="margin:0;font-family:var(--font-heading);font-weight:400;font-size:24px">My Tracks</h1>
+    </header>
+
+    <main style="flex:1;overflow:auto;padding:16px 24px 0 24px;display:flex;flex-direction:column;gap:12px">
+      <sc-for list="{{ tracks }}" as="track" hint-placeholder-count="3">
+        <button style="all:unset;cursor:pointer;background:var(--color-surface);border-radius:var(--radius-lg);padding:18px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px" onClick="{{ track.onOpen }}">
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <span style="font-size:15px;font-weight:700">{{ track.place }}</span>
+            <span style="font-size:13px;color:var(--color-neutral-700)">{{ track.date }} · Duração: {{ track.duration }} · {{ track.distance }}</span>
+          </div>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-neutral-600)" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M9 6l6 6-6 6"></path></svg>
+        </button>
+      </sc-for>
+    </main>
+
+    <footer style="padding:16px 24px 28px 24px;display:flex;gap:12px;background:var(--color-bg)">
+      <button class="btn btn-primary" style="flex:1.4;height:56px;border-radius:999px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:16px">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2.75" stroke-linejoin="round"><path d="M7 4l13 8-13 8z"></path></svg>
+        Nova sessão
+      </button>
+      <button class="btn btn-secondary" style="flex:1;height:56px;border-radius:999px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:16px">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l3 2"></path></svg>
+        Histórico
+      </button>
+    </footer>
+  </div>
+
+  <div data-screen-label="Configurações" style="width:390px;height:844px;background:var(--color-bg);border-radius:48px;box-shadow:var(--shadow-lg);overflow:hidden;display:flex;flex-direction:column;position:relative">
+    <div style="height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 28px;font-size:14px;font-weight:600">
+      <span>13:19</span><span style="font-size:12px">100%</span>
+    </div>
+    <header style="display:flex;align-items:center;gap:14px;padding:8px 24px 4px 20px">
+      <button class="btn btn-ghost btn-icon" aria-label="Menu" style="width:44px;height:44px;border-radius:999px">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h10"></path></svg>
+      </button>
+      <h1 style="margin:0;font-family:var(--font-heading);font-weight:400;font-size:24px">My Tracks</h1>
+    </header>
+
+    <main style="flex:1;overflow:auto;padding:8px 24px 24px 24px;display:flex;flex-direction:column;gap:28px">
+      <section style="display:flex;flex-direction:column;gap:8px">
+        <span style="font-size:13px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--color-neutral-600);padding:0 4px">Intervalo de leitura do GPS</span>
+        <select class="input" value="{{ gpsInterval }}" onChange="{{ onGpsIntervalChange }}" style="height:52px;border-radius:var(--radius-md);font-size:16px">
+          <sc-for list="{{ gpsIntervalOptions }}" as="opt" hint-placeholder-count="5">
+            <option value="{{ opt.value }}">{{ opt.label }}</option>
+          </sc-for>
+        </select>
+      </section>
+
+      <section style="display:flex;flex-direction:column;gap:10px">
+        <span style="font-size:13px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--color-neutral-600);padding:0 4px">Unidade de velocidade</span>
+        <div class="seg">
+          <sc-for list="{{ speedUnits }}" as="opt" hint-placeholder-count="3">
+            <label class="seg-opt" data-active="{{ opt.checked }}">
+              <input type="radio" name="speedUnit" checked="{{ opt.checked }}" onChange="{{ opt.onSelect }}" style="position:absolute;opacity:0">
+              {{ opt.label }}
+            </label>
+          </sc-for>
+        </div>
+      </section>
+
+      <section style="display:flex;flex-direction:column;gap:10px">
+        <span style="font-size:13px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--color-neutral-600);padding:0 4px">Unidade de distância</span>
+        <div class="seg">
+          <sc-for list="{{ distanceUnits }}" as="opt" hint-placeholder-count="3">
+            <label class="seg-opt" data-active="{{ opt.checked }}">
+              <input type="radio" name="distanceUnit" checked="{{ opt.checked }}" onChange="{{ opt.onSelect }}" style="position:absolute;opacity:0">
+              {{ opt.label }}
+            </label>
+          </sc-for>
+        </div>
+      </section>
+
+      <section style="display:flex;flex-direction:column;gap:8px">
+        <span style="font-size:13px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--color-neutral-600);padding:0 4px">Raio de parada (metros)</span>
+        <input class="input" type="number" defaultValue="150" style="height:52px;border-radius:var(--radius-md);font-size:16px"></input>
+      </section>
+
+      <section style="display:flex;flex-direction:column;gap:8px">
+        <span style="font-size:13px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--color-neutral-600);padding:0 4px">Duração de parada (minutos)</span>
+        <input class="input" type="number" defaultValue="5" style="height:52px;border-radius:var(--radius-md);font-size:16px"></input>
+      </section>
+
+      <section style="display:flex;flex-direction:column;gap:8px">
+        <span style="font-size:13px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--color-neutral-600);padding:0 4px">Precisão do GPS</span>
+        <div class="seg">
+          <sc-for list="{{ gpsAccuracies }}" as="opt" hint-placeholder-count="2">
+            <label class="seg-opt" data-active="{{ opt.checked }}">
+              <input type="radio" name="gpsAccuracy" checked="{{ opt.checked }}" onChange="{{ opt.onSelect }}" style="position:absolute;opacity:0">
+              {{ opt.label }}
+            </label>
+          </sc-for>
+        </div>
+      </section>
+
+      <section style="display:flex;flex-direction:column;gap:2px">
+        <div style="background:var(--color-surface);border-radius:var(--radius-lg);overflow:hidden;display:flex;flex-direction:column">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--color-neutral-300)">
+            <span style="font-size:15px;font-weight:600">Manter tela ativa durante a sessão</span>
+            <button role="switch" aria-checked="{{ keepScreenOn }}" onClick="{{ toggleKeepScreenOn }}" style="{{ keepScreenOnSwitchStyle }}">
+              <span style="{{ keepScreenOnDotStyle }}"></span>
+            </button>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 18px">
+            <span style="font-size:15px;font-weight:600">Alerta de pausa longa</span>
+            <button role="switch" aria-checked="{{ pauseAlert }}" onClick="{{ togglePauseAlert }}" style="{{ pauseAlertSwitchStyle }}">
+              <span style="{{ pauseAlertDotStyle }}"></span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section style="display:flex;flex-direction:column;gap:2px">
+        <div style="background:var(--color-surface);border-radius:var(--radius-lg);overflow:hidden;display:flex;flex-direction:column">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--color-neutral-300)">
+            <span style="font-size:15px;font-weight:600">Formato de exportação</span>
+            <div style="display:flex;align-items:center;gap:6px">
+              <span style="font-size:13px;color:var(--color-neutral-700)">GPX</span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-neutral-600)" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"></path></svg>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 18px">
+            <span style="font-size:15px;font-weight:600;color:var(--color-accent-700)">Limpar histórico de trilhas</span>
+          </div>
+        </div>
+      </section>
+
+      <span style="font-size:13px;color:var(--color-neutral-600);text-align:center;padding-top:4px">My Tracks · versão 2.4.1</span>
+    </main>
+
+    <footer style="padding:16px 24px 28px 24px;display:flex;gap:12px;background:var(--color-bg)">
+      <button class="btn btn-primary" style="flex:1.4;height:56px;border-radius:999px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:16px">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2.75" stroke-linejoin="round"><path d="M7 4l13 8-13 8z"></path></svg>
+        Nova sessão
+      </button>
+      <button class="btn btn-secondary" style="flex:1;height:56px;border-radius:999px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:16px">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l3 2"></path></svg>
+        Histórico
+      </button>
+    </footer>
+  </div>
+
   <div data-screen-label="Sessão" style="width:390px;height:844px;background:var(--color-bg);border-radius:48px;box-shadow:var(--shadow-lg);overflow:hidden;display:flex;flex-direction:column;position:relative">
     <div style="height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 28px;font-size:14px;font-weight:600">
       <span>12:19</span><span style="font-size:12px">100%</span>
@@ -117,12 +266,44 @@
 </x-dc>
 <script type="text/x-dc" data-dc-script>
 class Component extends DCLogic {
-  state = { big: false, isCollecting: true };
+  state = { big: false, isCollecting: true, gpsInterval: 60, speedUnit: 'KMH', distanceUnit: 'KM', gpsAccuracy: 'high', keepScreenOn: true, pauseAlert: false };
   renderVals() {
+    const switchStyle = on => `all:unset;width:44px;height:26px;border-radius:999px;background:${on ? 'var(--color-accent-2)' : 'var(--color-neutral-300)'};position:relative;flex-shrink:0;cursor:pointer`;
+    const switchDotStyle = on => `position:absolute;top:3px;${on ? 'right:3px' : 'left:3px'};width:20px;height:20px;border-radius:999px;background:var(--color-bg)`;
+    const gpsAccuracies = [
+      { v: 'high', label: 'Alta (mais bateria)' }, { v: 'balanced', label: 'Equilibrada' }
+    ].map(o => ({ label: o.label, checked: this.state.gpsAccuracy === o.v, onSelect: () => this.setState({ gpsAccuracy: o.v }) }));
+    const gpsIntervalOptions = [30, 45, 60, 120, 180].map(v => ({ value: v, label: v + ' segundos' }));
+    const speedUnits = [
+      { v: 'KMH', label: 'km/h' }, { v: 'MS', label: 'm/s' }, { v: 'KNOTS', label: 'nós' }
+    ].map(o => ({ label: o.label, checked: this.state.speedUnit === o.v, onSelect: () => this.setState({ speedUnit: o.v }) }));
+    const distanceUnits = [
+      { v: 'KM', label: 'km' }, { v: 'MILES', label: 'milhas' }, { v: 'NAUTICAL_MILES', label: 'milhas náuticas' }
+    ].map(o => ({ label: o.label, checked: this.state.distanceUnit === o.v, onSelect: () => this.setState({ distanceUnit: o.v }) }));
+    const tracks = [
+      { place: 'Praia do Gravatá', date: '23/09/2026', duration: '0:28', distance: '0,42 km' },
+      { place: 'Restaurante Pomerode', date: '22/09/2026', duration: '3:12', distance: '1,10 km' },
+      { place: 'Villa Foods Petiscaria', date: '22/09/2026', duration: '49:17', distance: '3,99 km' }
+    ].map(t => ({ ...t, onOpen: () => {} }));
     return {
       mapH: this.state.big ? '420px' : '220px',
       toggleMap: () => this.setState(s => ({ big: !s.big })),
-      isCollecting: this.state.isCollecting
+      isCollecting: this.state.isCollecting,
+      tracks,
+      gpsInterval: this.state.gpsInterval,
+      gpsIntervalOptions,
+      onGpsIntervalChange: e => this.setState({ gpsInterval: Number(e.target.value) }),
+      speedUnits,
+      distanceUnits,
+      gpsAccuracies,
+      keepScreenOn: this.state.keepScreenOn,
+      keepScreenOnSwitchStyle: switchStyle(this.state.keepScreenOn),
+      keepScreenOnDotStyle: switchDotStyle(this.state.keepScreenOn),
+      toggleKeepScreenOn: () => this.setState(s => ({ keepScreenOn: !s.keepScreenOn })),
+      pauseAlert: this.state.pauseAlert,
+      pauseAlertSwitchStyle: switchStyle(this.state.pauseAlert),
+      pauseAlertDotStyle: switchDotStyle(this.state.pauseAlert),
+      togglePauseAlert: () => this.setState(s => ({ pauseAlert: !s.pauseAlert }))
     };
   }
 }

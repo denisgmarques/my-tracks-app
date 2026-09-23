@@ -126,6 +126,13 @@ class ExportFormatDialogTest {
             SessionDetailScreen(viewModel = viewModel)
         }
 
+        // SessionDetailScreen renders nothing until its ViewModel's first real Flow emission
+        // lands (isLoaded) — see SessionDetailScreen's class doc — so the export action only
+        // exists once that's happened, not merely once composition starts.
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            composeTestRule.onAllNodesWithTag(SessionDetailScreenTestTags.EXPORT_ACTION).fetchSemanticsNodes().isNotEmpty()
+        }
+
         composeTestRule
             .onNodeWithTag(SessionDetailScreenTestTags.EXPORT_ACTION)
             .assertIsDisplayed()
@@ -145,6 +152,9 @@ class ExportFormatDialogTest {
             SessionDetailScreen(viewModel = viewModel)
         }
 
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            composeTestRule.onAllNodesWithTag(SessionDetailScreenTestTags.EXPORT_ACTION).fetchSemanticsNodes().isNotEmpty()
+        }
         composeTestRule.onNodeWithTag(SessionDetailScreenTestTags.EXPORT_ACTION).performClick()
 
         composeTestRule.onNodeWithTag(ExportFormatDialogTestTags.DIALOG).assertIsDisplayed()
@@ -176,6 +186,9 @@ class ExportFormatDialogTest {
             )
         }
 
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            composeTestRule.onAllNodesWithTag(SessionDetailScreenTestTags.EXPORT_ACTION).fetchSemanticsNodes().isNotEmpty()
+        }
         composeTestRule.onNodeWithTag(SessionDetailScreenTestTags.EXPORT_ACTION).performClick()
         composeTestRule.onNodeWithTag(ExportFormatDialogTestTags.GPX_OPTION).performClick()
         composeTestRule.waitForIdle()
@@ -211,6 +224,9 @@ class ExportFormatDialogTest {
             )
         }
 
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            composeTestRule.onAllNodesWithTag(SessionDetailScreenTestTags.EXPORT_ACTION).fetchSemanticsNodes().isNotEmpty()
+        }
         composeTestRule.onNodeWithTag(SessionDetailScreenTestTags.EXPORT_ACTION).performClick()
         composeTestRule.onNodeWithTag(ExportFormatDialogTestTags.CSV_OPTION).performClick()
         composeTestRule.waitForIdle()

@@ -11,6 +11,26 @@ Os arquivos deste pacote são **referências de design em HTML** — protótipos
 
 ## Screens / Views
 
+Este pacote cobre 3 telas do mesmo app, todas no mesmo arquivo de referência (`my-tracks-design.html`), lado a lado: **Histórico** (lista de trilhas salvas), **Configurações** e **Sessão** (tela original detalhada abaixo).
+
+### Tela: Histórico (trilhas salvas)
+**Propósito:** listar as sessões de rastreamento já salvas, com acesso rápido a "Nova sessão".
+
+**Layout:** header com botão de menu + título "My Tracks" (mesmo padrão da tela de Sessão). Lista vertical de cartões (gap 12px, padding 16px 24px), cada cartão: `background: var(--color-surface)`, `border-radius: var(--radius-lg)`, padding 18px 20px, `display:flex; justify-content:space-between`. Dentro de cada cartão: nome do local em destaque (15px/700) na linha de cima, e abaixo (13px, cor `--color-neutral-700`) "data · Duração: X · distância"; seta ">" à direita indicando que é clicável (abre detalhe da sessão). Footer igual ao da tela de Sessão: "Nova sessão" (`btn-primary`, mais largo) + "Histórico" (`btn-secondary`).
+
+### Tela: Configurações
+**Propósito:** ajustar parâmetros de coleta de GPS e preferências do app.
+
+**Layout:** header com botão de menu + título "My Tracks". Conteúdo em seções verticais (gap 28px entre seções, cada uma com label 13px/700 uppercase em `--color-neutral-600`):
+- **Intervalo de leitura do GPS:** `<select>` estilizado com `.input` (altura 52px, `--radius-md`), opções 30/45/60/120/180 segundos.
+- **Unidade de velocidade** e **Unidade de distância:** cada uma um segmented control (`.seg` / `.seg-opt`) com as opções km/h, m/s, nós — e km, milhas, milhas náuticas, respectivamente.
+- **Raio de parada (metros)** e **Duração de parada (minutos):** inputs numéricos (`.input`), valores padrão 150 e 5.
+- **Precisão do GPS:** segmented control com "Alta (mais bateria)" / "Equilibrada".
+- **Cartão de toggles:** "Manter tela ativa durante a sessão" (ligado por padrão) e "Alerta de pausa longa" (desligado por padrão) — switches pill customizados: trilho 44×26px, bolinha 20px, cor ligado `--color-accent-2`, desligado `--color-neutral-300`.
+- **Cartão de dados:** "Formato de exportação" (valor atual "GPX" + seta) e ação destrutiva "Limpar histórico de trilhas" (texto em `--color-accent-700`).
+- Rodapé de texto: "My Tracks · versão 2.4.1", centralizado, 13px, `--color-neutral-600`.
+- Footer com os mesmos botões "Nova sessão" / "Histórico" das outras telas.
+
 ### Tela: Sessão (My Tracks)
 **Propósito:** o usuário revisa as métricas da sessão de rastreamento recém-concluída (ou em andamento) e decide exportar, ver histórico ou iniciar uma nova sessão.
 

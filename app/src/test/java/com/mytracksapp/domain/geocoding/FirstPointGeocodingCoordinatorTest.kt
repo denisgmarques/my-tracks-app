@@ -3,6 +3,8 @@ package com.mytracksapp.domain.geocoding
 import com.mytracksapp.data.local.dao.TrackingSessionDao
 import com.mytracksapp.data.local.entity.SessionStatus
 import com.mytracksapp.data.local.entity.TrackingSessionEntity
+import com.mytracksapp.logging.LogLevel
+import com.mytracksapp.logging.Logger
 import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -33,7 +35,7 @@ private class FakeReverseGeocoder(
  * never will, for the "no write on failure" cases) without depending on virtual-time schedulers
  * that can't drive a real background dispatcher.
  */
-private class FakeTrackingSessionDao : TrackingSessionDao {
+private class FakeTrackingSessionDao(private val updateLocationNameFailure: Throwable? = null) : TrackingSessionDao {
     val updateLocationNameCalls = mutableListOf<Pair<String, String?>>()
     val latch = CountDownLatch(1)
 
@@ -47,7 +49,24 @@ private class FakeTrackingSessionDao : TrackingSessionDao {
     override suspend fun deleteAll() = error("not used in this test")
 
     override suspend fun updateLocationName(sessionId: String, locationName: String?) {
-        updateLocationNameCalls += sessionId to locationName
+        try {
+            updateLocationNameFailure?.let { throw it }
+            updateLocationNameCalls += sessionId to locationName
+        } finally {
+            latch.countDown()
+        }
+    }
+}
+
+/** [Logger] fake recording every [log] call, with a [latch] to await the background coroutine's log. */
+private class FakeLogger : Logger {
+    data class Entry(val level: LogLevel, val tag: String, val message: String, val throwable: Throwable?)
+
+    val entries = java.util.concurrent.CopyOnWriteArrayList<Entry>()
+    val latch = CountDownLatch(1)
+
+    override fun log(level: LogLevel, tag: String, message: String, throwable: Throwable?) {
+        entries += Entry(level, tag, message, throwable)
         latch.countDown()
     }
 }
@@ -135,5 +154,29 @@ class FirstPointGeocodingCoordinatorTest {
         )
         assertTrue("the geocode should still eventually complete in the background", dao.latch.await(2, TimeUnit.SECONDS))
         assertEquals(listOf("session-1" to "Delayed City"), dao.updateLocationNameCalls)
+    }
+
+    @Test
+    fun `exception from updateLocationName is logged and does not propagate`() {
+        val dao = FakeTrackingSessionDao(updateLocationNameFailure = IllegalStateException("db closed"))
+        val logger = FakeLogger()
+        val coordinator = FirstPointGeocodingCoordinator(
+            reverseGeocoder = FakeReverseGeocoder(result = "Sao Paulo"),
+            trackingSessionDao = dao,
+            coroutineScope = CoroutineScope(Dispatchers.Default),
+            logger = logger,
+        )
+
+        // Calling this must not throw to the caller even though updateLocationName will fail.
+        coordinator.onFirstPointRecorded("session-1", 1.0, 2.0)
+
+        assertTrue("updateLocationName should eventually be attempted", dao.latch.await(2, TimeUnit.SECONDS))
+        assertTrue("the failure should eventually be logged", logger.latch.await(2, TimeUnit.SECONDS))
+        assertEquals(1, logger.entries.size)
+        val entry = logger.entries.single()
+        assertEquals(LogLevel.ERROR, entry.level)
+        assertEquals("FirstPointGeocodingCoordinator", entry.tag)
+        assertTrue(entry.throwable is IllegalStateException)
+        assertTrue(dao.updateLocationNameCalls.isEmpty())
     }
 }

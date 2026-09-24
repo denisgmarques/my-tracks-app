@@ -7,6 +7,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
 
     <application
+        android:name=".MyTracksApplication"
         android:allowBackup="true"
         android:label="My Tracks App"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">

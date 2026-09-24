@@ -3,6 +3,9 @@ package com.mytracksapp.service
 import com.mytracksapp.data.local.dao.GpsPointDao
 import com.mytracksapp.data.local.entity.GpsPointEntity
 import com.mytracksapp.domain.model.SamplingInterval
+import com.mytracksapp.logging.FileLogger
+import com.mytracksapp.logging.LogLevel
+import com.mytracksapp.logging.Logger
 
 /**
  * A single raw location fix as reported by whatever underlying provider is wired in — production:
@@ -61,6 +64,7 @@ class LocationCollector(
     private val isSessionActive: suspend () -> Boolean,
     private val isLocationPermissionGranted: () -> Boolean,
     private val onFirstPointRecorded: (latitude: Double, longitude: Double) -> Unit = { _, _ -> },
+    private val logger: Logger = FileLogger,
 ) {
     private val configuredIntervalMillis: Long = interval.seconds * 1_000L
 
@@ -100,25 +104,29 @@ class LocationCollector(
         if (!collecting) return
         if (!isSessionActive()) return
 
-        val previousTimestamp = lastAcceptedTimestamp
-        val observedIntervalDriftMillis = previousTimestamp?.let { previous ->
-            (sample.timestamp - previous) - configuredIntervalMillis
-        }
+        try {
+            val previousTimestamp = lastAcceptedTimestamp
+            val observedIntervalDriftMillis = previousTimestamp?.let { previous ->
+                (sample.timestamp - previous) - configuredIntervalMillis
+            }
 
-        gpsPointDao.insert(
-            GpsPointEntity(
-                sessionId = sessionId,
-                timestamp = sample.timestamp,
-                latitude = sample.latitude,
-                longitude = sample.longitude,
-                accuracy = sample.accuracy,
-                observedIntervalDriftMillis = observedIntervalDriftMillis,
-            ),
-        )
-        lastAcceptedTimestamp = sample.timestamp
+            gpsPointDao.insert(
+                GpsPointEntity(
+                    sessionId = sessionId,
+                    timestamp = sample.timestamp,
+                    latitude = sample.latitude,
+                    longitude = sample.longitude,
+                    accuracy = sample.accuracy,
+                    observedIntervalDriftMillis = observedIntervalDriftMillis,
+                ),
+            )
+            lastAcceptedTimestamp = sample.timestamp
 
-        if (previousTimestamp == null) {
-            onFirstPointRecorded(sample.latitude, sample.longitude)
+            if (previousTimestamp == null) {
+                onFirstPointRecorded(sample.latitude, sample.longitude)
+            }
+        } catch (e: Exception) {
+            logger.log(LogLevel.ERROR, "LocationCollector", "Failed to process GPS sample", e)
         }
     }
 }

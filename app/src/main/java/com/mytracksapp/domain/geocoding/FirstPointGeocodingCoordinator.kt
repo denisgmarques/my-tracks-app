@@ -1,6 +1,9 @@
 package com.mytracksapp.domain.geocoding
 
 import com.mytracksapp.data.local.dao.TrackingSessionDao
+import com.mytracksapp.logging.FileLogger
+import com.mytracksapp.logging.LogLevel
+import com.mytracksapp.logging.Logger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -31,6 +34,7 @@ class FirstPointGeocodingCoordinator(
     private val reverseGeocoder: ReverseGeocoder,
     private val trackingSessionDao: TrackingSessionDao,
     private val coroutineScope: CoroutineScope,
+    private val logger: Logger = FileLogger,
 ) {
 
     /**
@@ -44,7 +48,16 @@ class FirstPointGeocodingCoordinator(
                 .getOrNull()
                 ?.takeIf { it.isNotBlank() }
             if (name != null) {
-                trackingSessionDao.updateLocationName(sessionId, name)
+                try {
+                    trackingSessionDao.updateLocationName(sessionId, name)
+                } catch (e: Exception) {
+                    logger.log(
+                        LogLevel.ERROR,
+                        "FirstPointGeocodingCoordinator",
+                        "Failed to persist geocoded location name",
+                        e,
+                    )
+                }
             }
         }
     }

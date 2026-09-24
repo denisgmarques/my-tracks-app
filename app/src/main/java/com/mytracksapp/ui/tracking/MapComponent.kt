@@ -26,6 +26,8 @@ import com.google.android.gms.maps.model.Marker
 import com.google.android.gms.maps.model.MarkerOptions
 import com.google.android.gms.maps.model.Polyline
 import com.google.android.gms.maps.model.PolylineOptions
+import com.mytracksapp.logging.FileLogger
+import com.mytracksapp.logging.LogLevel
 
 /** Stable test tags for [MapComponent], used by TrackingScreenTest (UI-02). */
 object MapComponentTestTags {
@@ -179,7 +181,13 @@ fun MapComponent(
                 // than crashing; the very next change recomputes bounds and self-corrects.
                 try {
                     map.moveCamera(CameraUpdateFactory.newLatLngBounds(bounds, 100))
-                } catch (_: IllegalStateException) {
+                } catch (e: IllegalStateException) {
+                    FileLogger.log(
+                        LogLevel.WARN,
+                        "MapComponent",
+                        "Bounds camera update failed, falling back to pan",
+                        e,
+                    )
                     map.moveCamera(CameraUpdateFactory.newLatLng(allPositions.last()))
                 }
             }

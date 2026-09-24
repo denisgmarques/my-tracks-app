@@ -60,6 +60,9 @@ import com.mytracksapp.domain.units.DistanceUnit
 import com.mytracksapp.domain.units.ElapsedTimeFormatter
 import com.mytracksapp.domain.units.SpeedFormatter
 import com.mytracksapp.domain.units.SpeedUnit
+import com.mytracksapp.logging.FileLogger
+import com.mytracksapp.logging.LogLevel
+import com.mytracksapp.logging.Logger
 import com.mytracksapp.ui.theme.Accent2
 import com.mytracksapp.ui.theme.Accent2800
 import com.mytracksapp.ui.theme.Accent700
@@ -153,6 +156,7 @@ class SessionDetailViewModel(
     trackingSessionDao: TrackingSessionDao,
     gpsPointDao: GpsPointDao,
     settingsRepository: SettingsRepository,
+    private val logger: Logger = FileLogger,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SessionDetailUiState(sessionId = sessionId))
@@ -160,39 +164,43 @@ class SessionDetailViewModel(
 
     init {
         viewModelScope.launch {
-            combine(
-                trackingSessionDao.getSessionById(sessionId),
-                gpsPointDao.getPointsForSession(sessionId),
-                settingsRepository.userSettings,
-            ) { session, points, settings -> Triple(session, points, settings) }
-                .collect { (session, points, settings) ->
-                    if (session == null) return@collect
-                    val classification = SegmentClassifier.classify(
-                        points,
-                        settings.stopRadiusMeters,
-                        settings.stopDurationMillis,
-                    )
-                    _uiState.update {
-                        it.copy(
-                            samplingIntervalSeconds = session.samplingIntervalSeconds,
-                            status = session.status,
-                            startTimestamp = session.startTimestamp,
-                            polyline = points.map { point ->
-                                TrackingPolylinePoint(latitude = point.latitude, longitude = point.longitude)
-                            },
-                            averageSpeedMetersPerSecond = StatsEngine.averageSpeedMetersPerSecond(points),
-                            totalDistanceMeters = StatsEngine.totalDistanceMeters(points),
-                            elapsedTimeMillis = StatsEngine.elapsedTimeMillis(points),
-                            stoppedTimeMillis = classification.stoppedTimeMillis,
-                            movingTimeMillis = classification.movingTimeMillis,
-                            stopLocations = classification.stopLocations,
-                            speedUnit = settings.speedUnit,
-                            distanceUnit = settings.distanceUnit,
-                            defaultExportFormat = settings.defaultExportFormat,
-                            isLoaded = true,
+            try {
+                combine(
+                    trackingSessionDao.getSessionById(sessionId),
+                    gpsPointDao.getPointsForSession(sessionId),
+                    settingsRepository.userSettings,
+                ) { session, points, settings -> Triple(session, points, settings) }
+                    .collect { (session, points, settings) ->
+                        if (session == null) return@collect
+                        val classification = SegmentClassifier.classify(
+                            points,
+                            settings.stopRadiusMeters,
+                            settings.stopDurationMillis,
                         )
+                        _uiState.update {
+                            it.copy(
+                                samplingIntervalSeconds = session.samplingIntervalSeconds,
+                                status = session.status,
+                                startTimestamp = session.startTimestamp,
+                                polyline = points.map { point ->
+                                    TrackingPolylinePoint(latitude = point.latitude, longitude = point.longitude)
+                                },
+                                averageSpeedMetersPerSecond = StatsEngine.averageSpeedMetersPerSecond(points),
+                                totalDistanceMeters = StatsEngine.totalDistanceMeters(points),
+                                elapsedTimeMillis = StatsEngine.elapsedTimeMillis(points),
+                                stoppedTimeMillis = classification.stoppedTimeMillis,
+                                movingTimeMillis = classification.movingTimeMillis,
+                                stopLocations = classification.stopLocations,
+                                speedUnit = settings.speedUnit,
+                                distanceUnit = settings.distanceUnit,
+                                defaultExportFormat = settings.defaultExportFormat,
+                                isLoaded = true,
+                            )
+                        }
                     }
-                }
+            } catch (e: Exception) {
+                logger.log(LogLevel.ERROR, "SessionDetailViewModel", "Failed to load session detail", e)
+            }
         }
     }
 }

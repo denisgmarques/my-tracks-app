@@ -3,6 +3,9 @@ package com.mytracksapp.service
 import android.content.Context
 import android.location.Geocoder
 import com.mytracksapp.domain.geocoding.ReverseGeocoder
+import com.mytracksapp.logging.FileLogger
+import com.mytracksapp.logging.LogLevel
+import com.mytracksapp.logging.Logger
 import java.io.IOException
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
@@ -17,14 +20,18 @@ import kotlinx.coroutines.withContext
  * Never throws to the caller: any [IOException] (no network / geocoder service unavailable) or
  * an empty/blank result is swallowed and reported as `null`.
  */
-class AndroidReverseGeocoder(private val context: Context) : ReverseGeocoder {
+class AndroidReverseGeocoder(
+    private val context: Context,
+    private val logger: Logger = FileLogger,
+) : ReverseGeocoder {
 
     override suspend fun reverseGeocode(latitude: Double, longitude: Double): String? =
         withContext(Dispatchers.IO) {
             val addresses = try {
                 @Suppress("DEPRECATION")
                 Geocoder(context, Locale.getDefault()).getFromLocation(latitude, longitude, 1)
-            } catch (_: IOException) {
+            } catch (e: IOException) {
+                logger.log(LogLevel.WARN, "AndroidReverseGeocoder", "Geocoder lookup failed", e)
                 null
             }
 

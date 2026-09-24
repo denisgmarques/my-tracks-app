@@ -3,6 +3,9 @@ package com.mytracksapp.domain.session
 import com.mytracksapp.data.local.dao.GpsPointDao
 import com.mytracksapp.data.local.dao.TrackingSessionDao
 import com.mytracksapp.data.local.entity.SessionStatus
+import com.mytracksapp.logging.FileLogger
+import com.mytracksapp.logging.LogLevel
+import com.mytracksapp.logging.Logger
 import kotlinx.coroutines.flow.first
 
 /**
@@ -30,6 +33,7 @@ import kotlinx.coroutines.flow.first
 class OrphanedSessionRecovery(
     private val trackingSessionDao: TrackingSessionDao,
     private val gpsPointDao: GpsPointDao,
+    private val logger: Logger = FileLogger,
 ) {
 
     /**
@@ -59,6 +63,12 @@ class OrphanedSessionRecovery(
             } catch (e: Exception) {
                 // Catch-and-continue: isolate a bad row so the rest of the batch still finishes
                 // (see class doc) — never rethrown, and never crashes cold start.
+                logger.log(
+                    LogLevel.ERROR,
+                    "OrphanedSessionRecovery",
+                    "Failed to finalize orphaned session ${session.id}",
+                    e,
+                )
             }
         }
         return recoveredCount

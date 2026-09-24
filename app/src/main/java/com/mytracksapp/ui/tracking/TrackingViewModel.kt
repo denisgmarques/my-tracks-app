@@ -8,6 +8,9 @@ import com.mytracksapp.domain.stats.SegmentClassifier
 import com.mytracksapp.domain.stats.StatsEngine
 import com.mytracksapp.domain.units.DistanceUnit
 import com.mytracksapp.domain.units.SpeedUnit
+import com.mytracksapp.logging.FileLogger
+import com.mytracksapp.logging.LogLevel
+import com.mytracksapp.logging.Logger
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -76,6 +79,7 @@ class TrackingViewModel(
     private val sessionId: String,
     private val gpsPointDao: GpsPointDao,
     private val settingsRepository: SettingsRepository,
+    private val logger: Logger = FileLogger,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(TrackingUiState(sessionId = sessionId))
@@ -83,33 +87,37 @@ class TrackingViewModel(
 
     init {
         viewModelScope.launch {
-            combine(
-                gpsPointDao.getPointsForSession(sessionId),
-                settingsRepository.userSettings,
-            ) { points, settings -> points to settings }
-                .collect { (points, settings) ->
-                    val classification = SegmentClassifier.classify(
-                        points,
-                        settings.stopRadiusMeters,
-                        settings.stopDurationMillis,
-                    )
-                    _uiState.update { current ->
-                        current.copy(
-                            polyline = points.map { point ->
-                                TrackingPolylinePoint(latitude = point.latitude, longitude = point.longitude)
-                            },
-                            instantSpeedMetersPerSecond = StatsEngine.instantSpeeds(points).lastOrNull() ?: 0.0,
-                            averageSpeedMetersPerSecond = StatsEngine.averageSpeedMetersPerSecond(points),
-                            totalDistanceMeters = StatsEngine.totalDistanceMeters(points),
-                            elapsedTimeMillis = StatsEngine.elapsedTimeMillis(points),
-                            stoppedTimeMillis = classification.stoppedTimeMillis,
-                            movingTimeMillis = classification.movingTimeMillis,
-                            speedUnit = settings.speedUnit,
-                            distanceUnit = settings.distanceUnit,
-                            keepScreenOnEnabled = settings.keepScreenOnEnabled,
+            try {
+                combine(
+                    gpsPointDao.getPointsForSession(sessionId),
+                    settingsRepository.userSettings,
+                ) { points, settings -> points to settings }
+                    .collect { (points, settings) ->
+                        val classification = SegmentClassifier.classify(
+                            points,
+                            settings.stopRadiusMeters,
+                            settings.stopDurationMillis,
                         )
+                        _uiState.update { current ->
+                            current.copy(
+                                polyline = points.map { point ->
+                                    TrackingPolylinePoint(latitude = point.latitude, longitude = point.longitude)
+                                },
+                                instantSpeedMetersPerSecond = StatsEngine.instantSpeeds(points).lastOrNull() ?: 0.0,
+                                averageSpeedMetersPerSecond = StatsEngine.averageSpeedMetersPerSecond(points),
+                                totalDistanceMeters = StatsEngine.totalDistanceMeters(points),
+                                elapsedTimeMillis = StatsEngine.elapsedTimeMillis(points),
+                                stoppedTimeMillis = classification.stoppedTimeMillis,
+                                movingTimeMillis = classification.movingTimeMillis,
+                                speedUnit = settings.speedUnit,
+                                distanceUnit = settings.distanceUnit,
+                                keepScreenOnEnabled = settings.keepScreenOnEnabled,
+                            )
+                        }
                     }
-                }
+            } catch (e: Exception) {
+                logger.log(LogLevel.ERROR, "TrackingViewModel", "Failed to collect GPS points", e)
+            }
         }
     }
 }

@@ -7,12 +7,16 @@ import com.mytracksapp.data.local.entity.SessionStatus
 import com.mytracksapp.data.local.entity.TrackingSessionEntity
 import com.mytracksapp.data.settings.SettingsRepository
 import com.mytracksapp.domain.units.DistanceUnit
+import com.mytracksapp.logging.LogLevel
+import com.mytracksapp.logging.Logger
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.resetMain
@@ -28,9 +32,15 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /** Mutable [TrackingSessionDao] double for [HistoryViewModelTest] — tracks [deletedIds]. */
-private class FakeTrackingSessionDao(initial: List<TrackingSessionEntity>) : TrackingSessionDao {
+private class FakeTrackingSessionDaoForHistory(initial: List<TrackingSessionEntity>) : TrackingSessionDao {
     private val state = MutableStateFlow(initial)
     val deletedIds = mutableListOf<String>()
+
+    /** T10: when set, [getSessionsByStatus]'s returned flow throws this instead of ever emitting. */
+    var throwOnGetSessionsByStatus: Throwable? = null
+
+    /** T10: when set, [deleteById] throws this instead of mutating [state]. */
+    var throwOnDeleteById: Throwable? = null
 
     override suspend fun insert(session: TrackingSessionEntity) = error("not used in this test")
     override suspend fun update(session: TrackingSessionEntity) = error("not used in this test")
@@ -40,10 +50,13 @@ private class FakeTrackingSessionDao(initial: List<TrackingSessionEntity>) : Tra
 
     override fun getAllSessions(): Flow<List<TrackingSessionEntity>> = state
 
-    override fun getSessionsByStatus(status: SessionStatus): Flow<List<TrackingSessionEntity>> =
-        state.map { sessions -> sessions.filter { it.status == status } }
+    override fun getSessionsByStatus(status: SessionStatus): Flow<List<TrackingSessionEntity>> = flow {
+        throwOnGetSessionsByStatus?.let { throw it }
+        emitAll(state.map { sessions -> sessions.filter { it.status == status } })
+    }
 
     override suspend fun deleteById(sessionId: String) {
+        throwOnDeleteById?.let { throw it }
         deletedIds += sessionId
         state.value = state.value.filterNot { it.id == sessionId }
     }
@@ -56,6 +69,17 @@ private class FakeTrackingSessionDao(initial: List<TrackingSessionEntity>) : Tra
         state.value = state.value.map { session ->
             if (session.id == sessionId) session.copy(locationName = locationName) else session
         }
+    }
+}
+
+/** In-memory [Logger] double — records every logged entry for assertions (T10). */
+private class FakeLoggerForHistory : Logger {
+    data class Entry(val level: LogLevel, val tag: String, val message: String, val throwable: Throwable?)
+
+    val entries = mutableListOf<Entry>()
+
+    override fun log(level: LogLevel, tag: String, message: String, throwable: Throwable?) {
+        entries += Entry(level, tag, message, throwable)
     }
 }
 
@@ -109,7 +133,7 @@ class HistoryViewModelTest {
     @Test
     fun `only finished sessions appear, mapped with id, start timestamp, duration, location and distance`() =
         runBlocking {
-            val dao = FakeTrackingSessionDao(
+            val dao = FakeTrackingSessionDaoForHistory(
                 listOf(
                     TrackingSessionEntity(
                         id = "finished-1",
@@ -163,7 +187,7 @@ class HistoryViewModelTest {
 
     @Test
     fun `no finished sessions yields an empty list`() = runBlocking {
-        val dao = FakeTrackingSessionDao(emptyList())
+        val dao = FakeTrackingSessionDaoForHistory(emptyList())
         val viewModel = HistoryViewModel(dao, settingsRepository())
 
         // Wait for at least one settings emission so we know the combine has actually run once,
@@ -178,7 +202,7 @@ class HistoryViewModelTest {
     @Test
     fun `formatted distance reflects the currently configured distance unit, and reacts to changes`() =
         runBlocking {
-            val dao = FakeTrackingSessionDao(
+            val dao = FakeTrackingSessionDaoForHistory(
                 listOf(
                     TrackingSessionEntity(
                         id = "finished-1",
@@ -202,4 +226,70 @@ class HistoryViewModelTest {
             state = awaitState(viewModel) { it.sessions.singleOrNull()?.distanceUnit == DistanceUnit.MILES }
             assertEquals("1.00 mi", state.sessions.single().formattedDistance)
         }
+
+    private suspend fun awaitLogEntry(logger: FakeLoggerForHistory, timeoutMillis: Long = 5_000) {
+        withTimeout(timeoutMillis) {
+            while (logger.entries.isEmpty()) {
+                delay(10)
+            }
+        }
+    }
+
+    @Test
+    fun `init logs and swallows a getSessionsByStatus failure, leaving uiState at its last valid value`() =
+        runBlocking {
+            val dao = FakeTrackingSessionDaoForHistory(emptyList())
+            val thrown = IllegalStateException("getSessionsByStatus boom")
+            dao.throwOnGetSessionsByStatus = thrown
+            val logger = FakeLoggerForHistory()
+
+            val viewModel = HistoryViewModel(dao, settingsRepository(), logger)
+
+            awaitLogEntry(logger)
+
+            val errorEntries = logger.entries.filter { it.level == LogLevel.ERROR }
+            assertEquals(1, errorEntries.size)
+            assertEquals("HistoryViewModel", errorEntries.single().tag)
+            // Compared by type+message, not instance: kotlinx.coroutines recovers the stack trace
+            // of exceptions crossing suspension points by copying them, so the logged throwable is
+            // not the same object identity as `thrown` even though it represents the same failure.
+            assertEquals(thrown::class, errorEntries.single().throwable?.let { it::class })
+            assertEquals(thrown.message, errorEntries.single().throwable?.message)
+
+            // uiState stays at its last valid value: the initial default, since the combine never
+            // successfully emitted before failing.
+            assertEquals(HistoryUiState(), viewModel.uiState.value)
+        }
+
+    @Test
+    fun `deleteSession logs and swallows a DAO failure, leaving the session unremoved`() = runBlocking {
+        val session = TrackingSessionEntity(
+            id = "finished-1",
+            samplingIntervalSeconds = 15,
+            startTimestamp = 0L,
+            endTimestamp = 60_000L,
+            status = SessionStatus.FINISHED,
+        )
+        val dao = FakeTrackingSessionDaoForHistory(listOf(session))
+        val thrown = IllegalStateException("deleteById boom")
+        dao.throwOnDeleteById = thrown
+        val logger = FakeLoggerForHistory()
+
+        val viewModel = HistoryViewModel(dao, settingsRepository(), logger)
+        awaitState(viewModel) { it.sessions.size == 1 }
+
+        viewModel.deleteSession(session.id)
+
+        awaitLogEntry(logger)
+
+        val errorEntries = logger.entries.filter { it.level == LogLevel.ERROR }
+        assertEquals(1, errorEntries.size)
+        assertEquals("HistoryViewModel", errorEntries.single().tag)
+        assertEquals(thrown, errorEntries.single().throwable)
+
+        assertTrue(dao.deletedIds.isEmpty())
+        // uiState unchanged: the session is still present since the throw happened before any
+        // state mutation.
+        assertEquals(1, viewModel.uiState.value.sessions.size)
+    }
 }

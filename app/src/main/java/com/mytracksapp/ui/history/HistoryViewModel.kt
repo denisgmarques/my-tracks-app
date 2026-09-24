@@ -9,6 +9,9 @@ import com.mytracksapp.data.settings.SettingsRepository
 import com.mytracksapp.domain.units.DistanceFormatter
 import com.mytracksapp.domain.units.DistanceUnit
 import com.mytracksapp.domain.units.ElapsedTimeFormatter
+import com.mytracksapp.logging.FileLogger
+import com.mytracksapp.logging.LogLevel
+import com.mytracksapp.logging.Logger
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -97,6 +100,7 @@ data class HistoryUiState(val sessions: List<HistoryListItem> = emptyList())
 class HistoryViewModel(
     private val trackingSessionDao: TrackingSessionDao,
     private val settingsRepository: SettingsRepository,
+    private val logger: Logger = FileLogger,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HistoryUiState())
@@ -104,13 +108,17 @@ class HistoryViewModel(
 
     init {
         viewModelScope.launch {
-            combine(
-                trackingSessionDao.getSessionsByStatus(SessionStatus.FINISHED),
-                settingsRepository.userSettings,
-            ) { sessions, settings ->
-                sessions.map { session -> session.toHistoryListItem(settings.distanceUnit) }
-            }.collect { items ->
-                _uiState.update { it.copy(sessions = items) }
+            try {
+                combine(
+                    trackingSessionDao.getSessionsByStatus(SessionStatus.FINISHED),
+                    settingsRepository.userSettings,
+                ) { sessions, settings ->
+                    sessions.map { session -> session.toHistoryListItem(settings.distanceUnit) }
+                }.collect { items ->
+                    _uiState.update { it.copy(sessions = items) }
+                }
+            } catch (e: Exception) {
+                logger.log(LogLevel.ERROR, "HistoryViewModel", "Failed to collect sessions", e)
             }
         }
     }
@@ -122,7 +130,11 @@ class HistoryViewModel(
      */
     fun deleteSession(sessionId: String) {
         viewModelScope.launch {
-            trackingSessionDao.deleteById(sessionId)
+            try {
+                trackingSessionDao.deleteById(sessionId)
+            } catch (e: Exception) {
+                logger.log(LogLevel.ERROR, "HistoryViewModel", "Failed to delete session $sessionId", e)
+            }
         }
     }
 }

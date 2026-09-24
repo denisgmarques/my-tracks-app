@@ -10,6 +10,9 @@ import com.mytracksapp.domain.model.GpsPrecision
 import com.mytracksapp.domain.model.SamplingInterval
 import com.mytracksapp.domain.units.DistanceUnit
 import com.mytracksapp.domain.units.SpeedUnit
+import com.mytracksapp.logging.FileLogger
+import com.mytracksapp.logging.LogLevel
+import com.mytracksapp.logging.Logger
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -66,6 +69,7 @@ data class SettingsUiState(
 class SettingsViewModel(
     private val settingsRepository: SettingsRepository,
     private val trackingSessionDao: TrackingSessionDao,
+    private val logger: Logger = FileLogger,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -73,35 +77,57 @@ class SettingsViewModel(
 
     init {
         viewModelScope.launch {
-            settingsRepository.userSettings.collect { settings ->
-                _uiState.update {
-                    it.copy(
-                        samplingInterval = settings.samplingInterval,
-                        speedUnit = settings.speedUnit,
-                        distanceUnit = settings.distanceUnit,
-                        stopRadiusMetersText = formatNumber(settings.stopRadiusMeters),
-                        stopRadiusError = null,
-                        stopDurationMinutesText = millisToMinutesText(settings.stopDurationMillis),
-                        stopDurationError = null,
-                        gpsPrecision = settings.gpsPrecision,
-                        keepScreenOnEnabled = settings.keepScreenOnEnabled,
-                        defaultExportFormat = settings.defaultExportFormat,
-                    )
+            try {
+                settingsRepository.userSettings.collect { settings ->
+                    _uiState.update {
+                        it.copy(
+                            samplingInterval = settings.samplingInterval,
+                            speedUnit = settings.speedUnit,
+                            distanceUnit = settings.distanceUnit,
+                            stopRadiusMetersText = formatNumber(settings.stopRadiusMeters),
+                            stopRadiusError = null,
+                            stopDurationMinutesText = millisToMinutesText(settings.stopDurationMillis),
+                            stopDurationError = null,
+                            gpsPrecision = settings.gpsPrecision,
+                            keepScreenOnEnabled = settings.keepScreenOnEnabled,
+                            defaultExportFormat = settings.defaultExportFormat,
+                        )
+                    }
                 }
+            } catch (e: Exception) {
+                logger.log(LogLevel.ERROR, "SettingsViewModel", "Failed to collect user settings", e)
             }
         }
     }
 
     fun onSamplingIntervalSelected(interval: SamplingInterval) {
-        viewModelScope.launch { settingsRepository.setSamplingInterval(interval) }
+        viewModelScope.launch {
+            try {
+                settingsRepository.setSamplingInterval(interval)
+            } catch (e: Exception) {
+                logger.log(LogLevel.ERROR, "SettingsViewModel", "Failed to persist sampling interval", e)
+            }
+        }
     }
 
     fun onSpeedUnitSelected(unit: SpeedUnit) {
-        viewModelScope.launch { settingsRepository.setSpeedUnit(unit) }
+        viewModelScope.launch {
+            try {
+                settingsRepository.setSpeedUnit(unit)
+            } catch (e: Exception) {
+                logger.log(LogLevel.ERROR, "SettingsViewModel", "Failed to persist speed unit", e)
+            }
+        }
     }
 
     fun onDistanceUnitSelected(unit: DistanceUnit) {
-        viewModelScope.launch { settingsRepository.setDistanceUnit(unit) }
+        viewModelScope.launch {
+            try {
+                settingsRepository.setDistanceUnit(unit)
+            } catch (e: Exception) {
+                logger.log(LogLevel.ERROR, "SettingsViewModel", "Failed to persist distance unit", e)
+            }
+        }
     }
 
     /** Updates the stop-radius draft text only; nothing is persisted until [onStopRadiusCommit]. */
@@ -117,7 +143,13 @@ class SettingsViewModel(
             return
         }
         _uiState.update { it.copy(stopRadiusError = null) }
-        viewModelScope.launch { settingsRepository.setStopRadiusMeters(meters) }
+        viewModelScope.launch {
+            try {
+                settingsRepository.setStopRadiusMeters(meters)
+            } catch (e: Exception) {
+                logger.log(LogLevel.ERROR, "SettingsViewModel", "Failed to persist stop radius", e)
+            }
+        }
     }
 
     /** Updates the stop-duration draft text only; nothing is persisted until [onStopDurationCommit]. */
@@ -134,22 +166,46 @@ class SettingsViewModel(
         }
         _uiState.update { it.copy(stopDurationError = null) }
         val millis = (minutes * MILLIS_PER_MINUTE).toLong()
-        viewModelScope.launch { settingsRepository.setStopDurationMillis(millis) }
+        viewModelScope.launch {
+            try {
+                settingsRepository.setStopDurationMillis(millis)
+            } catch (e: Exception) {
+                logger.log(LogLevel.ERROR, "SettingsViewModel", "Failed to persist stop duration", e)
+            }
+        }
     }
 
     /** UI-04: persists immediately, no "Save" button — same pattern as the other enum selectors. */
     fun onGpsPrecisionSelected(precision: GpsPrecision) {
-        viewModelScope.launch { settingsRepository.setGpsPrecision(precision) }
+        viewModelScope.launch {
+            try {
+                settingsRepository.setGpsPrecision(precision)
+            } catch (e: Exception) {
+                logger.log(LogLevel.ERROR, "SettingsViewModel", "Failed to persist GPS precision", e)
+            }
+        }
     }
 
     /** UI-05: persists immediately, no "Save" button. */
     fun onKeepScreenOnToggled(enabled: Boolean) {
-        viewModelScope.launch { settingsRepository.setKeepScreenOnEnabled(enabled) }
+        viewModelScope.launch {
+            try {
+                settingsRepository.setKeepScreenOnEnabled(enabled)
+            } catch (e: Exception) {
+                logger.log(LogLevel.ERROR, "SettingsViewModel", "Failed to persist keep-screen-on setting", e)
+            }
+        }
     }
 
     /** UI-07: persists immediately, no "Save" button. */
     fun onDefaultExportFormatSelected(format: ExportFormat) {
-        viewModelScope.launch { settingsRepository.setDefaultExportFormat(format) }
+        viewModelScope.launch {
+            try {
+                settingsRepository.setDefaultExportFormat(format)
+            } catch (e: Exception) {
+                logger.log(LogLevel.ERROR, "SettingsViewModel", "Failed to persist default export format", e)
+            }
+        }
     }
 
     /**
@@ -159,6 +215,12 @@ class SettingsViewModel(
      * existing "caller confirms first" contract; this function itself does not ask again.
      */
     fun clearHistory() {
-        viewModelScope.launch { trackingSessionDao.deleteAll() }
+        viewModelScope.launch {
+            try {
+                trackingSessionDao.deleteAll()
+            } catch (e: Exception) {
+                logger.log(LogLevel.ERROR, "SettingsViewModel", "Failed to clear history", e)
+            }
+        }
     }
 }

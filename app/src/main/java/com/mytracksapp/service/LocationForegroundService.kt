@@ -22,7 +22,11 @@ import com.mytracksapp.data.settings.SettingsRepository
 import com.mytracksapp.domain.geocoding.FirstPointGeocodingCoordinator
 import com.mytracksapp.domain.model.GpsPrecision
 import com.mytracksapp.domain.model.SamplingInterval
+import com.mytracksapp.logging.FileLogger
+import com.mytracksapp.logging.LogLevel
+import com.mytracksapp.logging.Logger
 import com.mytracksapp.permission.LocationPermissionManager
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -54,6 +58,7 @@ class FusedLocationSampleSource(
     private val fusedLocationProviderClient: FusedLocationProviderClient,
     private val coroutineScope: CoroutineScope,
     private val priority: Int = Priority.PRIORITY_HIGH_ACCURACY,
+    private val logger: Logger = FileLogger,
 ) : LocationSampleSource {
 
     private var activeCallback: LocationCallback? = null
@@ -66,15 +71,14 @@ class FusedLocationSampleSource(
         val callback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
                 val location = result.lastLocation ?: return
+                val sample = LocationSample(
+                    latitude = location.latitude,
+                    longitude = location.longitude,
+                    accuracy = location.accuracy,
+                    timestamp = location.time,
+                )
                 coroutineScope.launch {
-                    onLocation(
-                        LocationSample(
-                            latitude = location.latitude,
-                            longitude = location.longitude,
-                            accuracy = location.accuracy,
-                            timestamp = location.time,
-                        ),
-                    )
+                    deliverSample(sample, onLocation, logger)
                 }
             }
         }
@@ -87,6 +91,41 @@ class FusedLocationSampleSource(
         activeCallback = null
     }
 }
+
+/**
+ * T05 (RF-05) — delivers a single [LocationSample] to [onLocation], containing any failure inside
+ * this coroutine's own body via try/catch. Because this function runs entirely inside the
+ * `coroutineScope.launch { ... }` block started by [FusedLocationSampleSource.onLocationResult],
+ * a caught exception here is fully contained and never reaches `serviceScope`'s
+ * `CoroutineExceptionHandler` ([serviceScopeExceptionHandler], T04) — it is never rethrown, so it
+ * never propagates to the launching scope and never cancels it.
+ */
+internal suspend fun deliverSample(
+    sample: LocationSample,
+    onLocation: suspend (LocationSample) -> Unit,
+    logger: Logger,
+) {
+    try {
+        onLocation(sample)
+    } catch (e: Exception) {
+        logger.log(LogLevel.ERROR, "FusedLocationSampleSource", "Failed to deliver location sample", e)
+    }
+}
+
+/**
+ * T04 (RF-06) — builds the [CoroutineExceptionHandler] installed on [LocationForegroundService]'s
+ * `serviceScope`. Logs any coroutine exception that escapes uncaught out of a coroutine launched
+ * on that scope, then lets [CoroutineExceptionHandler]'s normal (non-rethrowing) contract stand —
+ * it never rethrows itself.
+ *
+ * RF-05's [deliverSample] try/catch sits fully inside its own launched coroutine's body, so a
+ * contained exception there is never uncaught and never reaches this handler (no double-logging
+ * between T04 and T05 — see PLAN.md's T04 Risk note).
+ */
+internal fun serviceScopeExceptionHandler(logger: Logger = FileLogger): CoroutineExceptionHandler =
+    CoroutineExceptionHandler { _, throwable ->
+        logger.log(LogLevel.ERROR, "LocationForegroundService", "Uncaught coroutine exception on serviceScope", throwable)
+    }
 
 /**
  * T06 — foreground service that performs the actual periodic GPS point collection for an active
@@ -104,7 +143,7 @@ class FusedLocationSampleSource(
 class LocationForegroundService : Service() {
 
     private val serviceJob = SupervisorJob()
-    private val serviceScope = CoroutineScope(Dispatchers.Default + serviceJob)
+    private val serviceScope = CoroutineScope(Dispatchers.Default + serviceJob + serviceScopeExceptionHandler())
 
     private var collector: LocationCollector? = null
 

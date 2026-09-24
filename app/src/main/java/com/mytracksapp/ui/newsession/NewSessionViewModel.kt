@@ -6,6 +6,9 @@ import com.mytracksapp.data.settings.SettingsRepository
 import com.mytracksapp.domain.model.SamplingInterval
 import com.mytracksapp.domain.session.SessionController
 import com.mytracksapp.domain.session.SessionStartOutcome
+import com.mytracksapp.logging.FileLogger
+import com.mytracksapp.logging.LogLevel
+import com.mytracksapp.logging.Logger
 import com.mytracksapp.permission.LocationPermissionManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -48,6 +51,7 @@ class NewSessionViewModel(
     private val permissionManager: LocationPermissionManager,
     private val sessionController: SessionController,
     private val settingsRepository: SettingsRepository,
+    private val logger: Logger = FileLogger,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(NewSessionUiState())
@@ -55,8 +59,12 @@ class NewSessionViewModel(
 
     init {
         viewModelScope.launch {
-            settingsRepository.userSettings.collect { settings ->
-                _uiState.update { it.copy(configuredInterval = settings.samplingInterval) }
+            try {
+                settingsRepository.userSettings.collect { settings ->
+                    _uiState.update { it.copy(configuredInterval = settings.samplingInterval) }
+                }
+            } catch (e: Exception) {
+                logger.log(LogLevel.ERROR, "NewSessionViewModel", "Failed to collect user settings", e)
             }
         }
     }
@@ -78,18 +86,22 @@ class NewSessionViewModel(
         _uiState.update { it.copy(isStarting = true, permissionDeniedMessage = null) }
 
         viewModelScope.launch {
-            val interval = settingsRepository.userSettings.first().samplingInterval
-            when (val outcome = sessionController.startSession(interval)) {
-                is SessionStartOutcome.Started -> _uiState.update {
-                    it.copy(isStarting = false, startedSessionId = outcome.sessionId)
-                }
+            try {
+                val interval = settingsRepository.userSettings.first().samplingInterval
+                when (val outcome = sessionController.startSession(interval)) {
+                    is SessionStartOutcome.Started -> _uiState.update {
+                        it.copy(isStarting = false, startedSessionId = outcome.sessionId)
+                    }
 
-                SessionStartOutcome.PermissionDenied -> _uiState.update {
-                    it.copy(
-                        isStarting = false,
-                        permissionDeniedMessage = BACKGROUND_LOCATION_PERMISSION_REQUIRED_MESSAGE,
-                    )
+                    SessionStartOutcome.PermissionDenied -> _uiState.update {
+                        it.copy(
+                            isStarting = false,
+                            permissionDeniedMessage = BACKGROUND_LOCATION_PERMISSION_REQUIRED_MESSAGE,
+                        )
+                    }
                 }
+            } catch (e: Exception) {
+                logger.log(LogLevel.ERROR, "NewSessionViewModel", "Failed to start session", e)
             }
         }
     }

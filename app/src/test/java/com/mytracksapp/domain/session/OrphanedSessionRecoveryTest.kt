@@ -5,6 +5,8 @@ import com.mytracksapp.data.local.dao.TrackingSessionDao
 import com.mytracksapp.data.local.entity.GpsPointEntity
 import com.mytracksapp.data.local.entity.SessionStatus
 import com.mytracksapp.data.local.entity.TrackingSessionEntity
+import com.mytracksapp.logging.LogLevel
+import com.mytracksapp.logging.Logger
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
@@ -20,7 +22,8 @@ import org.junit.Test
  * `RecoveryFakeTrackingSessionDao`, plus a `seed` helper so tests can put a row straight into `ACTIVE`
  * state without going through `SessionControllerImpl.startSession`.
  */
-private class RecoveryFakeTrackingSessionDao : TrackingSessionDao {
+private class RecoveryFakeTrackingSessionDao(private val updateFailures: Map<String, Throwable> = emptyMap()) :
+    TrackingSessionDao {
     val updatedSessions = mutableListOf<TrackingSessionEntity>()
     private val sessionsById = mutableMapOf<String, MutableStateFlow<TrackingSessionEntity?>>()
 
@@ -33,6 +36,7 @@ private class RecoveryFakeTrackingSessionDao : TrackingSessionDao {
     }
 
     override suspend fun update(session: TrackingSessionEntity) {
+        updateFailures[session.id]?.let { throw it }
         updatedSessions += session
         sessionsById.getOrPut(session.id) { MutableStateFlow(null) }.value = session
     }
@@ -78,6 +82,17 @@ private class RecoveryFakeGpsPointDao : GpsPointDao {
 
     override suspend fun countForSession(sessionId: String): Int =
         pointsBySession[sessionId]?.size ?: 0
+}
+
+/** [Logger] fake recording every [log] call — see T07. */
+private class FakeLogger : Logger {
+    data class Entry(val level: LogLevel, val tag: String, val message: String, val throwable: Throwable?)
+
+    val entries = mutableListOf<Entry>()
+
+    override fun log(level: LogLevel, tag: String, message: String, throwable: Throwable?) {
+        entries += Entry(level, tag, message, throwable)
+    }
 }
 
 /**
@@ -209,4 +224,29 @@ class OrphanedSessionRecoveryTest {
         val count = recovery.recover()
         assertEquals(1, count)
     }
+
+    @Test
+    fun `a session that throws during finalization is logged and skipped without aborting the rest of the batch`() =
+        runBlocking {
+            val failure = IllegalStateException("corrupt row")
+            val logger = FakeLogger()
+            val dao = RecoveryFakeTrackingSessionDao(updateFailures = mapOf("bad-session" to failure))
+            val points = RecoveryFakeGpsPointDao()
+            val recoveryWithLogger = OrphanedSessionRecovery(dao, points, logger)
+
+            dao.seed(activeSession("bad-session", startTimestamp = 0L))
+            dao.seed(activeSession("good-session", startTimestamp = 0L))
+
+            val count = recoveryWithLogger.recover()
+
+            // Only the good session is counted/updated; the bad one is skipped, not aborting the batch.
+            assertEquals(1, count)
+            assertEquals(listOf("good-session"), dao.updatedSessions.map { it.id })
+
+            assertEquals(1, logger.entries.size)
+            val entry = logger.entries.single()
+            assertEquals(LogLevel.ERROR, entry.level)
+            assertEquals("OrphanedSessionRecovery", entry.tag)
+            assertEquals(failure, entry.throwable)
+        }
 }

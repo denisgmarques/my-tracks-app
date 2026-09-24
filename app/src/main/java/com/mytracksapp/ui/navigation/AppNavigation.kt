@@ -69,9 +69,13 @@ import androidx.navigation.navArgument
 import com.mytracksapp.data.local.dao.GpsPointDao
 import com.mytracksapp.data.local.dao.TrackingSessionDao
 import com.mytracksapp.data.settings.SettingsRepository
+import com.mytracksapp.domain.export.ExportFormat
 import com.mytracksapp.domain.export.ExportService
 import com.mytracksapp.domain.session.OrphanedSessionRecovery
 import com.mytracksapp.domain.session.SessionController
+import com.mytracksapp.logging.FileLogger
+import com.mytracksapp.logging.LogLevel
+import com.mytracksapp.logging.Logger
 import com.mytracksapp.permission.LocationPermissionManager
 import com.mytracksapp.ui.HistoryViewModelFactory
 import com.mytracksapp.ui.NewSessionViewModelFactory
@@ -477,10 +481,39 @@ private fun TrackingRoute(
     TrackingScreen(
         viewModel = viewModel,
         onFinishSession = { finishedSessionId ->
-            sessionController.stopSession(finishedSessionId)
-            onSessionFinished()
+            finishSessionSafely(
+                sessionController = sessionController,
+                sessionId = finishedSessionId,
+                onSessionFinished = onSessionFinished,
+            )
         },
     )
+}
+
+/**
+ * T14 (RF-12) — extracted stop-session call-site failure containment for [TrackingRoute]'s
+ * "Encerrar sessão" button handler. Same shape/rationale as [exportSessionSafely] (see its doc and
+ * PLAN.md's "Key design decision"): a top-level function with a trailing, defaulted [logger]
+ * parameter, since `AppNavigation.kt` has no enclosing class here either.
+ *
+ * On failure, the exception is logged and swallowed — no rethrow, and, critically,
+ * [onSessionFinished] is NOT invoked, so a failed stop never triggers the success-path
+ * navigation/state that would otherwise follow it. On success, [SessionController.stopSession]'s
+ * side effects and [onSessionFinished]'s invocation run exactly as before (byte-identical success
+ * path, RNF-01/AC-07).
+ */
+internal suspend fun finishSessionSafely(
+    sessionController: SessionController,
+    sessionId: String,
+    onSessionFinished: () -> Unit,
+    logger: Logger = FileLogger,
+) {
+    try {
+        sessionController.stopSession(sessionId)
+        onSessionFinished()
+    } catch (e: Exception) {
+        logger.log(LogLevel.ERROR, "TrackingSessionFinish", "Failed to stop session $sessionId", e)
+    }
 }
 
 @Composable
@@ -512,10 +545,38 @@ private fun SessionDetailRoute(
     SessionDetailScreen(
         viewModel = viewModel,
         onExport = { exportedSessionId, format ->
-            val exportedFile = exportService.export(exportedSessionId, format)
-            exportedFile.writeTo(File(context.filesDir, "exports"))
+            exportSessionSafely(
+                exportService = exportService,
+                sessionId = exportedSessionId,
+                format = format,
+                exportsDir = File(context.filesDir, "exports"),
+            )
         },
     )
+}
+
+/**
+ * T08 (RF-08) — extracted export call-site failure containment for [SessionDetailRoute.onExport].
+ * `AppNavigation.kt` has no enclosing class for these two composables' call sites to attach a
+ * constructor-injected `logger` parameter to (see PLAN.md's "Key design decision"), so this is a
+ * top-level function with its own trailing, defaulted [logger] parameter instead.
+ *
+ * On failure, the exception is logged and swallowed — no rethrow, no UI-visible side effect,
+ * matching RF-08's "export failures should not crash the app or surface an unhandled error".
+ */
+internal suspend fun exportSessionSafely(
+    exportService: ExportService,
+    sessionId: String,
+    format: ExportFormat,
+    exportsDir: File,
+    logger: Logger = FileLogger,
+) {
+    try {
+        val exportedFile = exportService.export(sessionId, format)
+        exportedFile.writeTo(exportsDir)
+    } catch (e: Exception) {
+        logger.log(LogLevel.ERROR, "SessionDetailExport", "Export failed for session $sessionId", e)
+    }
 }
 
 @Composable

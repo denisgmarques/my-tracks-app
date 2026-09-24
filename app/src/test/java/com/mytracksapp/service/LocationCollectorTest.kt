@@ -3,6 +3,8 @@ package com.mytracksapp.service
 import com.mytracksapp.data.local.dao.GpsPointDao
 import com.mytracksapp.data.local.entity.GpsPointEntity
 import com.mytracksapp.domain.model.SamplingInterval
+import com.mytracksapp.logging.LogLevel
+import com.mytracksapp.logging.Logger
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
@@ -15,7 +17,13 @@ import org.junit.Test
 private class FakeGpsPointDao : GpsPointDao {
     val insertedPoints = mutableListOf<GpsPointEntity>()
 
+    /** Timestamps for which [insert] should throw instead of recording the point (T03). */
+    var timestampsToFailOn: Set<Long> = emptySet()
+
     override suspend fun insert(point: GpsPointEntity): Long {
+        if (point.timestamp in timestampsToFailOn) {
+            throw IllegalStateException("Simulated insert failure for timestamp ${point.timestamp}")
+        }
         insertedPoints += point
         return insertedPoints.size.toLong()
     }
@@ -27,6 +35,17 @@ private class FakeGpsPointDao : GpsPointDao {
 
     override suspend fun countForSession(sessionId: String): Int =
         insertedPoints.count { it.sessionId == sessionId }
+}
+
+/** In-memory [Logger] double — records every logged entry for assertions (T03). */
+private class FakeLoggerForCollector : Logger {
+    data class Entry(val level: LogLevel, val tag: String, val message: String, val throwable: Throwable?)
+
+    val entries = mutableListOf<Entry>()
+
+    override fun log(level: LogLevel, tag: String, message: String, throwable: Throwable?) {
+        entries += Entry(level, tag, message, throwable)
+    }
 }
 
 /**
@@ -73,6 +92,7 @@ class LocationCollectorTest {
         sessionActive: () -> Boolean = { true },
         permissionGranted: () -> Boolean = { true },
         onFirstPointRecorded: (latitude: Double, longitude: Double) -> Unit = { _, _ -> },
+        logger: Logger = FakeLoggerForCollector(),
     ) = LocationCollector(
         sessionId = sessionId,
         interval = interval,
@@ -81,6 +101,7 @@ class LocationCollectorTest {
         isSessionActive = sessionActive,
         isLocationPermissionGranted = permissionGranted,
         onFirstPointRecorded = onFirstPointRecorded,
+        logger = logger,
     )
 
     @Test
@@ -194,4 +215,39 @@ class LocationCollectorTest {
         assertTrue(!started)
         assertTrue(recordedCalls.isEmpty())
     }
+
+    @Test
+    fun `a failing sample is logged and does not stop subsequent samples from being persisted`() =
+        runBlocking {
+            val fakeLogger = FakeLoggerForCollector()
+            gpsPointDao.timestampsToFailOn = setOf(10_000L)
+            collector(logger = fakeLogger).start()
+
+            locationSampleSource.emit(
+                LocationSample(latitude = 0.0, longitude = 0.0, accuracy = 5f, timestamp = 0L),
+            )
+            // This sample's DAO insert throws — should be caught, logged, and not escape.
+            locationSampleSource.emit(
+                LocationSample(latitude = 1.0, longitude = 1.0, accuracy = 5f, timestamp = 10_000L),
+            )
+            locationSampleSource.emit(
+                LocationSample(latitude = 2.0, longitude = 2.0, accuracy = 5f, timestamp = 20_000L),
+            )
+
+            // (a) exactly one error-level entry containing the thrown exception.
+            assertEquals(1, fakeLogger.entries.size)
+            val entry = fakeLogger.entries.single()
+            assertEquals(LogLevel.ERROR, entry.level)
+            assertEquals("LocationCollector", entry.tag)
+            assertTrue(entry.throwable is IllegalStateException)
+
+            // (c) every other sample is still persisted via gpsPointDao.insert.
+            assertEquals(2, gpsPointDao.insertedPoints.size)
+            assertEquals(0L, gpsPointDao.insertedPoints[0].timestamp)
+            assertEquals(20_000L, gpsPointDao.insertedPoints[1].timestamp)
+            // The failed sample's timestamp is never committed as the "last accepted" one, so the
+            // third sample's drift is computed against the first (successful) sample, not the
+            // failed second one.
+            assertEquals(10_000L, gpsPointDao.insertedPoints[1].observedIntervalDriftMillis)
+        }
 }

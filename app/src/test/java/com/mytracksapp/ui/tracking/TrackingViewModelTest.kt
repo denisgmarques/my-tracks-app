@@ -8,12 +8,16 @@ import com.mytracksapp.data.settings.SettingsRepository
 import com.mytracksapp.domain.stats.StatsEngine
 import com.mytracksapp.domain.units.DistanceUnit
 import com.mytracksapp.domain.units.SpeedUnit
+import com.mytracksapp.logging.LogLevel
+import com.mytracksapp.logging.Logger
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
@@ -36,6 +40,9 @@ import org.robolectric.annotation.Config
 private class FakeGpsPointDao : GpsPointDao {
     private val pointsBySession = mutableMapOf<String, MutableStateFlow<List<GpsPointEntity>>>()
 
+    /** T11: when set, [getPointsForSession]'s returned flow throws this instead of ever emitting. */
+    var throwOnGetPointsForSession: Throwable? = null
+
     private fun flowFor(sessionId: String): MutableStateFlow<List<GpsPointEntity>> =
         pointsBySession.getOrPut(sessionId) { MutableStateFlow(emptyList()) }
 
@@ -47,13 +54,27 @@ private class FakeGpsPointDao : GpsPointDao {
     override suspend fun insertAll(points: List<GpsPointEntity>): List<Long> =
         points.map { insert(it) }
 
-    override fun getPointsForSession(sessionId: String): Flow<List<GpsPointEntity>> = flowFor(sessionId)
+    override fun getPointsForSession(sessionId: String): Flow<List<GpsPointEntity>> = flow {
+        throwOnGetPointsForSession?.let { throw it }
+        emitAll(flowFor(sessionId))
+    }
 
     override suspend fun countForSession(sessionId: String): Int = flowFor(sessionId).value.size
 
     /** Simulates a new Room query result after a point is persisted for [sessionId]. */
     fun emit(sessionId: String, points: List<GpsPointEntity>) {
         flowFor(sessionId).value = points
+    }
+}
+
+/** In-memory [Logger] double — records every logged entry for assertions (T11). */
+private class FakeLogger : Logger {
+    data class Entry(val level: LogLevel, val tag: String, val message: String, val throwable: Throwable?)
+
+    val entries = mutableListOf<Entry>()
+
+    override fun log(level: LogLevel, tag: String, message: String, throwable: Throwable?) {
+        entries += Entry(level, tag, message, throwable)
     }
 }
 
@@ -251,5 +272,45 @@ class TrackingViewModelTest {
 
             state = awaitState(viewModel) { it.keepScreenOnEnabled }
             assertEquals(true, state.keepScreenOnEnabled)
+        }
+
+    private suspend fun awaitLogEntry(logger: FakeLogger, timeoutMillis: Long = 5_000) {
+        withTimeout(timeoutMillis) {
+            while (logger.entries.isEmpty()) {
+                delay(10)
+            }
+        }
+    }
+
+    @Test
+    fun `init logs and swallows a getPointsForSession failure, leaving uiState at its last valid value`() =
+        runBlocking {
+            val sessionId = "session-failure"
+            val dao = FakeGpsPointDao()
+            val thrown = IllegalStateException("getPointsForSession boom")
+            dao.throwOnGetPointsForSession = thrown
+            val logger = FakeLogger()
+
+            val viewModel = TrackingViewModel(
+                sessionId = sessionId,
+                gpsPointDao = dao,
+                settingsRepository = settingsRepository(),
+                logger = logger,
+            )
+
+            awaitLogEntry(logger)
+
+            val errorEntries = logger.entries.filter { it.level == LogLevel.ERROR }
+            assertEquals(1, errorEntries.size)
+            assertEquals("TrackingViewModel", errorEntries.single().tag)
+            // Compared by type+message, not instance: kotlinx.coroutines recovers the stack trace
+            // of exceptions crossing suspension points by copying them, so the logged throwable is
+            // not the same object identity as `thrown` even though it represents the same failure.
+            assertEquals(thrown::class, errorEntries.single().throwable?.let { it::class })
+            assertEquals(thrown.message, errorEntries.single().throwable?.message)
+
+            // uiState stays at its last valid value: the constructor-seeded initial state, since
+            // the combine never successfully emitted before failing.
+            assertEquals(TrackingUiState(sessionId = sessionId), viewModel.uiState.value)
         }
 }

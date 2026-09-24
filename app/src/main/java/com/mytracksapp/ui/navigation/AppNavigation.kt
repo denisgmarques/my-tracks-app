@@ -27,6 +27,8 @@ import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.NavigationDrawerItemDefaults
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -42,7 +44,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -65,6 +70,7 @@ import com.mytracksapp.data.local.dao.GpsPointDao
 import com.mytracksapp.data.local.dao.TrackingSessionDao
 import com.mytracksapp.data.settings.SettingsRepository
 import com.mytracksapp.domain.export.ExportService
+import com.mytracksapp.domain.session.OrphanedSessionRecovery
 import com.mytracksapp.domain.session.SessionController
 import com.mytracksapp.permission.LocationPermissionManager
 import com.mytracksapp.ui.HistoryViewModelFactory
@@ -163,10 +169,34 @@ fun MyTracksApp(
     permissionManager: LocationPermissionManager,
     exportService: ExportService,
     settingsRepository: SettingsRepository,
+    orphanedSessionRecovery: OrphanedSessionRecovery,
 ) {
     val navController = rememberNavController()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val coroutineScope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+    var recoveredCount by remember { mutableStateOf<Int?>(null) }
+
+    // Fired once per composition, deliberately never awaited by anything else in this tree
+    // (RNF-01): the initial History screen below must render on its own timeline regardless of
+    // how long orphanedSessionRecovery.recover() takes.
+    LaunchedEffect(Unit) {
+        recoveredCount = orphanedSessionRecovery.recover()
+    }
+
+    // Separate effect keyed on the result so the Snackbar only fires once recover() completes,
+    // and only when it actually recovered something (UI-01: N = 0 shows nothing).
+    LaunchedEffect(recoveredCount) {
+        val count = recoveredCount
+        if (count != null && count > 0) {
+            val message = if (count == 1) {
+                "1 sessão anterior foi encerrada automaticamente porque o app foi interrompido antes da finalização."
+            } else {
+                "$count sessões anteriores foram encerradas automaticamente porque o app foi interrompido antes da finalização."
+            }
+            snackbarHostState.showSnackbar(message)
+        }
+    }
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -213,6 +243,7 @@ fun MyTracksApp(
         },
     ) {
         Scaffold(
+            snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 TopAppBar(
                     title = {

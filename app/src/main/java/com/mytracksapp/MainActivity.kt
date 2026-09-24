@@ -9,6 +9,7 @@ import androidx.compose.ui.Modifier
 import com.mytracksapp.data.local.AppDatabase
 import com.mytracksapp.data.settings.SettingsRepository
 import com.mytracksapp.domain.export.ExportService
+import com.mytracksapp.domain.session.OrphanedSessionRecovery
 import com.mytracksapp.domain.session.SessionControllerImpl
 import com.mytracksapp.permission.LocationPermissionManager
 import com.mytracksapp.service.LocationForegroundServiceController
@@ -48,6 +49,7 @@ class MainActivity : ComponentActivity() {
         )
         val exportService = ExportService(trackingSessionDao, gpsPointDao)
         val settingsRepository = SettingsRepository(applicationContext)
+        val orphanedSessionRecovery = OrphanedSessionRecovery(trackingSessionDao, gpsPointDao)
 
         setContent {
             MyTracksTheme {
@@ -59,6 +61,7 @@ class MainActivity : ComponentActivity() {
                         permissionManager = permissionManager,
                         exportService = exportService,
                         settingsRepository = settingsRepository,
+                        orphanedSessionRecovery = orphanedSessionRecovery,
                     )
                 }
             }

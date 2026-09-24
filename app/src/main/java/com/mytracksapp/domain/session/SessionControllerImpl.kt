@@ -2,6 +2,7 @@ package com.mytracksapp.domain.session
 
 import com.mytracksapp.data.local.dao.GpsPointDao
 import com.mytracksapp.data.local.dao.TrackingSessionDao
+import com.mytracksapp.data.local.entity.GpsPointEntity
 import com.mytracksapp.data.local.entity.SessionStatus
 import com.mytracksapp.data.local.entity.TrackingSessionEntity
 import com.mytracksapp.domain.model.SamplingInterval
@@ -107,20 +108,38 @@ class SessionControllerImpl(
         val existing = trackingSessionDao.getSessionById(sessionId).first() ?: return
         val points = gpsPointDao.getPointsForSession(sessionId).first()
 
-        val classification = SegmentClassifier.classify(points)
-        val averageSpeed = StatsEngine.averageSpeedMetersPerSecond(points)
-        val distanceMeters = StatsEngine.totalDistanceMeters(points)
-        val endTimestamp = if (points.isNotEmpty()) points.last().timestamp else clock()
-
-        trackingSessionDao.update(
-            existing.copy(
-                endTimestamp = endTimestamp,
-                status = SessionStatus.FINISHED,
-                stoppedTimeMillis = classification.stoppedTimeMillis,
-                movingTimeMillis = classification.movingTimeMillis,
-                averageSpeedMetersPerSecond = averageSpeed,
-                distanceMeters = distanceMeters,
-            ),
-        )
+        trackingSessionDao.update(finalizeSession(existing, points, endTimestampFallback = clock()))
     }
+}
+
+/**
+ * Pure finalization math shared by [SessionControllerImpl.stopSession] and
+ * `OrphanedSessionRecovery.recover()` (T01/T02, orphaned-session-recovery feature, RF-03): computes
+ * the same [SegmentClassifier]/[StatsEngine]-derived metrics and returns the [FINISHED][SessionStatus.FINISHED]
+ * copy of [existing] to persist. Makes no DAO calls itself — the caller owns the
+ * `trackingSessionDao.update(...)` write, and decides what [endTimestampFallback] means for its own
+ * call site (`stopSession` passes `clock()`; the recovery routine deliberately passes the session's
+ * own `startTimestamp` instead — see RF-02).
+ *
+ * [endTimestampFallback] is only used when [points] is empty; otherwise `endTimestamp` is the last
+ * point's timestamp, exactly as `stopSession` always computed it.
+ */
+internal fun finalizeSession(
+    existing: TrackingSessionEntity,
+    points: List<GpsPointEntity>,
+    endTimestampFallback: Long,
+): TrackingSessionEntity {
+    val classification = SegmentClassifier.classify(points)
+    val averageSpeed = StatsEngine.averageSpeedMetersPerSecond(points)
+    val distanceMeters = StatsEngine.totalDistanceMeters(points)
+    val endTimestamp = if (points.isNotEmpty()) points.last().timestamp else endTimestampFallback
+
+    return existing.copy(
+        endTimestamp = endTimestamp,
+        status = SessionStatus.FINISHED,
+        stoppedTimeMillis = classification.stoppedTimeMillis,
+        movingTimeMillis = classification.movingTimeMillis,
+        averageSpeedMetersPerSecond = averageSpeed,
+        distanceMeters = distanceMeters,
+    )
 }

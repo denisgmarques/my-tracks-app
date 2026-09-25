@@ -153,41 +153,20 @@ class StatsEngineTest {
     }
 
     @Test
-    fun `averageSpeedMetersPerSecond equals total distance over total elapsed time`() {
-        val p0 = point("s1", 0L, 0.0, 0.0)
-        val p1 = point("s1", 10_000L, 0.001, 0.0)
-        val p2 = point("s1", 25_000L, 0.002, 0.0)
-        val points = listOf(p0, p1, p2)
-
-        val totalDistance = referenceHaversineMeters(p0.latitude, p0.longitude, p1.latitude, p1.longitude) +
-            referenceHaversineMeters(p1.latitude, p1.longitude, p2.latitude, p2.longitude)
-        val totalElapsedSeconds = (p2.timestamp - p0.timestamp) / 1000.0
-        val expectedAverage = totalDistance / totalElapsedSeconds
-
-        assertEquals(expectedAverage, StatsEngine.averageSpeedMetersPerSecond(points), 0.001)
-    }
-
-    @Test
-    fun `averageSpeedMetersPerSecond is zero for fewer than two points`() {
-        assertEquals(0.0, StatsEngine.averageSpeedMetersPerSecond(emptyList()), 0.0)
-        assertEquals(
-            0.0,
-            StatsEngine.averageSpeedMetersPerSecond(listOf(point("s1", 0L, 0.0, 0.0))),
-            0.0,
+    fun `averageSpeedMetersPerSecond equals distance over moving time, ignoring stopped time`() {
+        // 1000m covered in 100s of actual moving time; the session also includes 500s stopped
+        // (e.g. traffic lights) that must NOT count against the average.
+        val result = StatsEngine.averageSpeedMetersPerSecond(
+            distanceMeters = 1_000.0,
+            movingTimeMillis = 100_000L,
         )
+
+        assertEquals(10.0, result, 0.001)
     }
 
     @Test
-    fun `averageSpeedMetersPerSecond recalculates correctly as new points are appended`() {
-        val p0 = point("s1", 0L, 0.0, 0.0)
-        val p1 = point("s1", 10_000L, 0.001, 0.0)
-
-        val afterFirstSegment = StatsEngine.averageSpeedMetersPerSecond(listOf(p0, p1))
-
-        val p2 = point("s1", 20_000L, 0.002, 0.0)
-        val afterSecondSegment = StatsEngine.averageSpeedMetersPerSecond(listOf(p0, p1, p2))
-
-        // Same lat step repeated at the same time cadence -> average speed stays the same.
-        assertEquals(afterFirstSegment, afterSecondSegment, 0.001)
+    fun `averageSpeedMetersPerSecond is zero when moving time is zero or negative`() {
+        assertEquals(0.0, StatsEngine.averageSpeedMetersPerSecond(1_000.0, 0L), 0.0)
+        assertEquals(0.0, StatsEngine.averageSpeedMetersPerSecond(1_000.0, -1L), 0.0)
     }
 }

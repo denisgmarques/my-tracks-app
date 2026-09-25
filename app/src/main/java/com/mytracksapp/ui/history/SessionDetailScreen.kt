@@ -177,6 +177,7 @@ class SessionDetailViewModel(
                             settings.stopRadiusMeters,
                             settings.stopDurationMillis,
                         )
+                        val totalDistanceMeters = StatsEngine.totalDistanceMeters(points)
                         _uiState.update {
                             it.copy(
                                 samplingIntervalSeconds = session.samplingIntervalSeconds,
@@ -185,8 +186,11 @@ class SessionDetailViewModel(
                                 polyline = points.map { point ->
                                     TrackingPolylinePoint(latitude = point.latitude, longitude = point.longitude)
                                 },
-                                averageSpeedMetersPerSecond = StatsEngine.averageSpeedMetersPerSecond(points),
-                                totalDistanceMeters = StatsEngine.totalDistanceMeters(points),
+                                averageSpeedMetersPerSecond = StatsEngine.averageSpeedMetersPerSecond(
+                                    totalDistanceMeters,
+                                    classification.movingTimeMillis,
+                                ),
+                                totalDistanceMeters = totalDistanceMeters,
                                 elapsedTimeMillis = StatsEngine.elapsedTimeMillis(points),
                                 stoppedTimeMillis = classification.stoppedTimeMillis,
                                 movingTimeMillis = classification.movingTimeMillis,

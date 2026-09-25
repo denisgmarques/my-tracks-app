@@ -225,7 +225,10 @@ class TrackingSessionE2ETest {
         assertEquals(pointCount, finalPoints.size)
 
         val expectedClassification = SegmentClassifier.classify(finalPoints)
-        val expectedAverageSpeed = StatsEngine.averageSpeedMetersPerSecond(finalPoints)
+        val expectedAverageSpeed = StatsEngine.averageSpeedMetersPerSecond(
+            StatsEngine.totalDistanceMeters(finalPoints),
+            expectedClassification.movingTimeMillis,
+        )
         val expectedElapsedMillis = StatsEngine.elapsedTimeMillis(finalPoints)
 
         assertEquals(expectedClassification.stoppedTimeMillis, finishedSession.stoppedTimeMillis)

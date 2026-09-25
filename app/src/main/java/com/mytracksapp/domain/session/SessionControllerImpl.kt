@@ -130,8 +130,8 @@ internal fun finalizeSession(
     endTimestampFallback: Long,
 ): TrackingSessionEntity {
     val classification = SegmentClassifier.classify(points)
-    val averageSpeed = StatsEngine.averageSpeedMetersPerSecond(points)
     val distanceMeters = StatsEngine.totalDistanceMeters(points)
+    val averageSpeed = StatsEngine.averageSpeedMetersPerSecond(distanceMeters, classification.movingTimeMillis)
     val endTimestamp = if (points.isNotEmpty()) points.last().timestamp else endTimestampFallback
 
     return existing.copy(

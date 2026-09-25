@@ -185,12 +185,18 @@ class OrphanedSessionRecoveryE2ETest {
             assertEquals(StatsEngine.totalDistanceMeters(storedPointsA), finishedA.distanceMeters, 0.0001)
             assertEquals(StatsEngine.totalDistanceMeters(storedPointsB), finishedB.distanceMeters, 0.0001)
             assertEquals(
-                StatsEngine.averageSpeedMetersPerSecond(storedPointsA),
+                StatsEngine.averageSpeedMetersPerSecond(
+                    StatsEngine.totalDistanceMeters(storedPointsA),
+                    expectedClassificationA.movingTimeMillis,
+                ),
                 finishedA.averageSpeedMetersPerSecond,
                 0.0001,
             )
             assertEquals(
-                StatsEngine.averageSpeedMetersPerSecond(storedPointsB),
+                StatsEngine.averageSpeedMetersPerSecond(
+                    StatsEngine.totalDistanceMeters(storedPointsB),
+                    expectedClassificationB.movingTimeMillis,
+                ),
                 finishedB.averageSpeedMetersPerSecond,
                 0.0001,
             )

@@ -66,14 +66,18 @@ object StatsEngine {
     }
 
     /**
-     * Average speed (m/s) across the whole session (RF-05): total distance traveled divided by
-     * total elapsed time. `0.0` for sessions with fewer than 2 points, or zero elapsed time
-     * (e.g. two points sharing the same timestamp).
+     * Average speed (m/s) while actually moving: [distanceMeters] divided by [movingTimeMillis]
+     * (the [SegmentClassifier]-derived moving time, not the session's total elapsed time).
+     *
+     * Deliberately excludes stopped time — a session's total-elapsed-time average is dragged down
+     * by every second spent stopped (traffic lights, parking, catching your breath), which made a
+     * car trip's average appear slower than a bike ride's on days with a lot of stop-and-go, and
+     * made the live value visibly drop while genuinely stationary. `0.0` when [movingTimeMillis]
+     * is zero or negative (e.g. a session that never moved) to avoid a division by zero.
      */
-    fun averageSpeedMetersPerSecond(points: List<GpsPointEntity>): Double {
-        if (points.size < 2) return 0.0
-        val elapsedSeconds = elapsedTimeMillis(points) / 1000.0
-        if (elapsedSeconds <= 0.0) return 0.0
-        return totalDistanceMeters(points) / elapsedSeconds
+    fun averageSpeedMetersPerSecond(distanceMeters: Double, movingTimeMillis: Long): Double {
+        val movingSeconds = movingTimeMillis / 1000.0
+        if (movingSeconds <= 0.0) return 0.0
+        return distanceMeters / movingSeconds
     }
 }

@@ -98,14 +98,18 @@ class TrackingViewModel(
                             settings.stopRadiusMeters,
                             settings.stopDurationMillis,
                         )
+                        val totalDistanceMeters = StatsEngine.totalDistanceMeters(points)
                         _uiState.update { current ->
                             current.copy(
                                 polyline = points.map { point ->
                                     TrackingPolylinePoint(latitude = point.latitude, longitude = point.longitude)
                                 },
                                 instantSpeedMetersPerSecond = StatsEngine.instantSpeeds(points).lastOrNull() ?: 0.0,
-                                averageSpeedMetersPerSecond = StatsEngine.averageSpeedMetersPerSecond(points),
-                                totalDistanceMeters = StatsEngine.totalDistanceMeters(points),
+                                averageSpeedMetersPerSecond = StatsEngine.averageSpeedMetersPerSecond(
+                                    totalDistanceMeters,
+                                    classification.movingTimeMillis,
+                                ),
+                                totalDistanceMeters = totalDistanceMeters,
                                 elapsedTimeMillis = StatsEngine.elapsedTimeMillis(points),
                                 stoppedTimeMillis = classification.stoppedTimeMillis,
                                 movingTimeMillis = classification.movingTimeMillis,

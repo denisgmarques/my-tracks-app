@@ -13,6 +13,7 @@ import com.mytracksapp.domain.units.SpeedUnit
 import com.mytracksapp.logging.FileLogger
 import com.mytracksapp.logging.LogLevel
 import com.mytracksapp.logging.Logger
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -94,6 +95,8 @@ class SettingsViewModel(
                         )
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 logger.log(LogLevel.ERROR, "SettingsViewModel", "Failed to collect user settings", e)
             }
@@ -104,6 +107,9 @@ class SettingsViewModel(
         viewModelScope.launch {
             try {
                 settingsRepository.setSamplingInterval(interval)
+                logger.log(LogLevel.INFO, "SettingsViewModel", "Sampling interval changed to ${interval.seconds}s")
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 logger.log(LogLevel.ERROR, "SettingsViewModel", "Failed to persist sampling interval", e)
             }
@@ -114,6 +120,9 @@ class SettingsViewModel(
         viewModelScope.launch {
             try {
                 settingsRepository.setSpeedUnit(unit)
+                logger.log(LogLevel.INFO, "SettingsViewModel", "Speed unit changed to $unit")
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 logger.log(LogLevel.ERROR, "SettingsViewModel", "Failed to persist speed unit", e)
             }
@@ -124,6 +133,9 @@ class SettingsViewModel(
         viewModelScope.launch {
             try {
                 settingsRepository.setDistanceUnit(unit)
+                logger.log(LogLevel.INFO, "SettingsViewModel", "Distance unit changed to $unit")
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 logger.log(LogLevel.ERROR, "SettingsViewModel", "Failed to persist distance unit", e)
             }
@@ -146,6 +158,9 @@ class SettingsViewModel(
         viewModelScope.launch {
             try {
                 settingsRepository.setStopRadiusMeters(meters)
+                logger.log(LogLevel.INFO, "SettingsViewModel", "Stop radius changed to ${meters}m")
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 logger.log(LogLevel.ERROR, "SettingsViewModel", "Failed to persist stop radius", e)
             }
@@ -169,6 +184,9 @@ class SettingsViewModel(
         viewModelScope.launch {
             try {
                 settingsRepository.setStopDurationMillis(millis)
+                logger.log(LogLevel.INFO, "SettingsViewModel", "Stop duration changed to ${millis}ms")
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 logger.log(LogLevel.ERROR, "SettingsViewModel", "Failed to persist stop duration", e)
             }
@@ -180,6 +198,9 @@ class SettingsViewModel(
         viewModelScope.launch {
             try {
                 settingsRepository.setGpsPrecision(precision)
+                logger.log(LogLevel.INFO, "SettingsViewModel", "GPS precision changed to $precision")
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 logger.log(LogLevel.ERROR, "SettingsViewModel", "Failed to persist GPS precision", e)
             }
@@ -191,6 +212,9 @@ class SettingsViewModel(
         viewModelScope.launch {
             try {
                 settingsRepository.setKeepScreenOnEnabled(enabled)
+                logger.log(LogLevel.INFO, "SettingsViewModel", "Keep-screen-on changed to $enabled")
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 logger.log(LogLevel.ERROR, "SettingsViewModel", "Failed to persist keep-screen-on setting", e)
             }
@@ -202,6 +226,9 @@ class SettingsViewModel(
         viewModelScope.launch {
             try {
                 settingsRepository.setDefaultExportFormat(format)
+                logger.log(LogLevel.INFO, "SettingsViewModel", "Default export format changed to $format")
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 logger.log(LogLevel.ERROR, "SettingsViewModel", "Failed to persist default export format", e)
             }
@@ -218,6 +245,9 @@ class SettingsViewModel(
         viewModelScope.launch {
             try {
                 trackingSessionDao.deleteAll()
+                logger.log(LogLevel.INFO, "SettingsViewModel", "History cleared (all sessions deleted)")
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 logger.log(LogLevel.ERROR, "SettingsViewModel", "Failed to clear history", e)
             }

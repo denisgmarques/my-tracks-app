@@ -15,6 +15,7 @@ import com.mytracksapp.logging.Logger
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -117,6 +118,8 @@ class HistoryViewModel(
                 }.collect { items ->
                     _uiState.update { it.copy(sessions = items) }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 logger.log(LogLevel.ERROR, "HistoryViewModel", "Failed to collect sessions", e)
             }
@@ -132,6 +135,8 @@ class HistoryViewModel(
         viewModelScope.launch {
             try {
                 trackingSessionDao.deleteById(sessionId)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 logger.log(LogLevel.ERROR, "HistoryViewModel", "Failed to delete session $sessionId", e)
             }

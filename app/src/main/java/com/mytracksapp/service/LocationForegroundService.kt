@@ -27,6 +27,7 @@ import com.mytracksapp.logging.FileLogger
 import com.mytracksapp.logging.LogLevel
 import com.mytracksapp.logging.Logger
 import com.mytracksapp.permission.LocationPermissionManager
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -108,6 +109,8 @@ internal suspend fun deliverSample(
 ) {
     try {
         onLocation(sample)
+    } catch (e: CancellationException) {
+        throw e
     } catch (e: Exception) {
         logger.log(LogLevel.ERROR, "FusedLocationSampleSource", "Failed to deliver location sample", e)
     }

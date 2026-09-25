@@ -10,6 +10,7 @@ import com.mytracksapp.logging.FileLogger
 import com.mytracksapp.logging.LogLevel
 import com.mytracksapp.logging.Logger
 import com.mytracksapp.permission.LocationPermissionManager
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -63,6 +64,8 @@ class NewSessionViewModel(
                 settingsRepository.userSettings.collect { settings ->
                     _uiState.update { it.copy(configuredInterval = settings.samplingInterval) }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 logger.log(LogLevel.ERROR, "NewSessionViewModel", "Failed to collect user settings", e)
             }
@@ -100,6 +103,8 @@ class NewSessionViewModel(
                         )
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 logger.log(LogLevel.ERROR, "NewSessionViewModel", "Failed to start session", e)
             }

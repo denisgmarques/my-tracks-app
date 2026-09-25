@@ -6,6 +6,7 @@ import com.mytracksapp.domain.model.SamplingInterval
 import com.mytracksapp.logging.FileLogger
 import com.mytracksapp.logging.LogLevel
 import com.mytracksapp.logging.Logger
+import kotlinx.coroutines.CancellationException
 
 /**
  * A single raw location fix as reported by whatever underlying provider is wired in — production:
@@ -125,6 +126,8 @@ class LocationCollector(
             if (previousTimestamp == null) {
                 onFirstPointRecorded(sample.latitude, sample.longitude)
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             logger.log(LogLevel.ERROR, "LocationCollector", "Failed to process GPS sample", e)
         }

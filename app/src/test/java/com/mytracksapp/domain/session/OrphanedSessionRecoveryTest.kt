@@ -247,9 +247,11 @@ class OrphanedSessionRecoveryTest {
             assertEquals(1, count)
             assertEquals(listOf("good-session"), dao.updatedSessions.map { it.id })
 
-            assertEquals(1, logger.entries.size)
-            val entry = logger.entries.single()
-            assertEquals(LogLevel.ERROR, entry.level)
+            // A successful recovery now also logs an INFO entry (business-level logging) alongside
+            // the bad session's ERROR entry — assert the ERROR one specifically.
+            val errorEntries = logger.entries.filter { it.level == LogLevel.ERROR }
+            assertEquals(1, errorEntries.size)
+            val entry = errorEntries.single()
             assertEquals("OrphanedSessionRecovery", entry.tag)
             assertEquals(failure, entry.throwable)
         }

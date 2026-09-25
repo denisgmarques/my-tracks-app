@@ -4,6 +4,7 @@ import com.mytracksapp.data.local.dao.TrackingSessionDao
 import com.mytracksapp.logging.FileLogger
 import com.mytracksapp.logging.LogLevel
 import com.mytracksapp.logging.Logger
+import kotlinx.coroutines.CancellationException
 
 /**
  * RF-03's single implementation of "geocode one lat/lon fix and, on success, persist it as a
@@ -53,6 +54,8 @@ class GeocodeAndPersist(
         return try {
             trackingSessionDao.updateLocationName(sessionId, name)
             true
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             logger.log(
                 LogLevel.ERROR,

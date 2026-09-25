@@ -6,6 +6,7 @@ import com.mytracksapp.data.local.entity.SessionStatus
 import com.mytracksapp.logging.FileLogger
 import com.mytracksapp.logging.LogLevel
 import com.mytracksapp.logging.Logger
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 
 /**
@@ -64,6 +65,8 @@ class GeocodingRetryOnStartup(
                 if (persisted) {
                     successCount++
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 // Catch-and-continue: isolate a bad row so the rest of the batch still finishes
                 // (see class doc) — never rethrown, and never crashes cold start.

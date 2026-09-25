@@ -81,6 +81,7 @@ import com.mytracksapp.ui.tracking.TrackingPolylinePoint
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -202,6 +203,8 @@ class SessionDetailViewModel(
                             )
                         }
                     }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 logger.log(LogLevel.ERROR, "SessionDetailViewModel", "Failed to load session detail", e)
             }

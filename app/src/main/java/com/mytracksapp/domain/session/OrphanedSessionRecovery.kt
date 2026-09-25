@@ -6,6 +6,7 @@ import com.mytracksapp.data.local.entity.SessionStatus
 import com.mytracksapp.logging.FileLogger
 import com.mytracksapp.logging.LogLevel
 import com.mytracksapp.logging.Logger
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 
 /**
@@ -60,6 +61,14 @@ class OrphanedSessionRecovery(
                 )
                 trackingSessionDao.update(finalized)
                 recoveredCount++
+                logger.log(
+                    LogLevel.INFO,
+                    "OrphanedSessionRecovery",
+                    "Recovered orphaned session: id=${session.id}, distanceMeters=${finalized.distanceMeters}, " +
+                        "movingTimeMillis=${finalized.movingTimeMillis}, pointCount=${points.size}",
+                )
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 // Catch-and-continue: isolate a bad row so the rest of the batch still finishes
                 // (see class doc) — never rethrown, and never crashes cold start.
@@ -70,6 +79,13 @@ class OrphanedSessionRecovery(
                     e,
                 )
             }
+        }
+        if (recoveredCount > 0) {
+            logger.log(
+                LogLevel.INFO,
+                "OrphanedSessionRecovery",
+                "Recovery completed: $recoveredCount of ${orphaned.size} orphaned session(s) recovered",
+            )
         }
         return recoveredCount
     }

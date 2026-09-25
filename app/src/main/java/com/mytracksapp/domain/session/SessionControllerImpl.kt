@@ -8,6 +8,9 @@ import com.mytracksapp.data.local.entity.TrackingSessionEntity
 import com.mytracksapp.domain.model.SamplingInterval
 import com.mytracksapp.domain.stats.SegmentClassifier
 import com.mytracksapp.domain.stats.StatsEngine
+import com.mytracksapp.logging.FileLogger
+import com.mytracksapp.logging.LogLevel
+import com.mytracksapp.logging.Logger
 import java.util.UUID
 import kotlinx.coroutines.flow.first
 
@@ -72,6 +75,7 @@ class SessionControllerImpl(
     private val isBackgroundLocationGranted: () -> Boolean,
     private val idGenerator: () -> String = { UUID.randomUUID().toString() },
     private val clock: () -> Long = { System.currentTimeMillis() },
+    private val logger: Logger = FileLogger,
 ) : SessionController {
 
     override suspend fun startSession(interval: SamplingInterval): SessionStartOutcome {
@@ -98,6 +102,11 @@ class SessionControllerImpl(
         trackingSessionDao.insert(session)
         locationServiceController.start(sessionId, interval)
 
+        logger.log(
+            LogLevel.INFO,
+            "SessionController",
+            "Session started: id=$sessionId, samplingIntervalSeconds=${interval.seconds}",
+        )
         return SessionStartOutcome.Started(sessionId)
     }
 
@@ -108,7 +117,16 @@ class SessionControllerImpl(
         val existing = trackingSessionDao.getSessionById(sessionId).first() ?: return
         val points = gpsPointDao.getPointsForSession(sessionId).first()
 
-        trackingSessionDao.update(finalizeSession(existing, points, endTimestampFallback = clock()))
+        val finalized = finalizeSession(existing, points, endTimestampFallback = clock())
+        trackingSessionDao.update(finalized)
+
+        logger.log(
+            LogLevel.INFO,
+            "SessionController",
+            "Session finished: id=$sessionId, distanceMeters=${finalized.distanceMeters}, " +
+                "movingTimeMillis=${finalized.movingTimeMillis}, stoppedTimeMillis=${finalized.stoppedTimeMillis}, " +
+                "pointCount=${points.size}",
+        )
     }
 }
 

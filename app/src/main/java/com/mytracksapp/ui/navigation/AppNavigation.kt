@@ -98,6 +98,7 @@ import com.mytracksapp.ui.settings.SettingsViewModel
 import com.mytracksapp.ui.tracking.TrackingScreen
 import com.mytracksapp.ui.tracking.TrackingViewModel
 import java.io.File
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 /**
@@ -556,6 +557,8 @@ internal suspend fun finishSessionSafely(
     try {
         sessionController.stopSession(sessionId)
         onSessionFinished()
+    } catch (e: CancellationException) {
+        throw e
     } catch (e: Exception) {
         logger.log(LogLevel.ERROR, "TrackingSessionFinish", "Failed to stop session $sessionId", e)
     }
@@ -619,6 +622,8 @@ internal suspend fun exportSessionSafely(
     try {
         val exportedFile = exportService.export(sessionId, format)
         exportedFile.writeTo(exportsDir)
+    } catch (e: CancellationException) {
+        throw e
     } catch (e: Exception) {
         logger.log(LogLevel.ERROR, "SessionDetailExport", "Export failed for session $sessionId", e)
     }

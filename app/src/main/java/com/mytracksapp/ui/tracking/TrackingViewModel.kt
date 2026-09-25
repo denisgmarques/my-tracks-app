@@ -11,6 +11,7 @@ import com.mytracksapp.domain.units.SpeedUnit
 import com.mytracksapp.logging.FileLogger
 import com.mytracksapp.logging.LogLevel
 import com.mytracksapp.logging.Logger
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -119,6 +120,8 @@ class TrackingViewModel(
                             )
                         }
                     }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 logger.log(LogLevel.ERROR, "TrackingViewModel", "Failed to collect GPS points", e)
             }

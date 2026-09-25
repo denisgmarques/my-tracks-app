@@ -2,7 +2,7 @@
 
 [![Android CI](https://github.com/denisgmarques/my-tracks-app/actions/workflows/android-ci.yml/badge.svg)](https://github.com/denisgmarques/my-tracks-app/actions/workflows/android-ci.yml)
 
-Protótipo Android nativo (Kotlin + Jetpack Compose) de rastreamento de GPS. A ideia original: registrar a posição em intervalos configuráveis (1s a 180s) e ver na prática como isso se comporta — precisão, consumo de bateria, comportamento em segundo plano — antes de decidir em cima de qual caso de uso vale a pena construir de verdade (regata/vela, corrida/pedal, ou um app para prestadores de serviço que precisam registrar deslocamento).
+Protótipo Android nativo (Kotlin + Jetpack Compose) de rastreamento de GPS. A ideia original: registrar a posição em intervalos configuráveis (1s a 180s), registrar os pontos de parada e ver na prática como isso se comporta — precisão, consumo de bateria, comportamento em segundo plano — antes de decidir em cima de qual caso de uso vale a pena construir de verdade (regata/vela, corrida/pedal, ou um app para prestadores de serviço que precisam registrar deslocamento).
 
 ## Screenshots
 

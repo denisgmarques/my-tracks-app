@@ -47,6 +47,10 @@ private class FakeTrackingSessionDao(sessionId: String) : TrackingSessionDao {
         flowOf(listOf(session).filter { it.status == status })
     override suspend fun deleteById(sessionId: String) = Unit
     override suspend fun deleteAll() = Unit
+    override suspend fun getFinishedSessionsWithoutLocationNameSince(
+        status: SessionStatus,
+        sinceTimestamp: Long,
+    ): List<TrackingSessionEntity> = emptyList()
     override suspend fun updateLocationName(sessionId: String, locationName: String?) = Unit
 }
 

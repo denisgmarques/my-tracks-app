@@ -36,6 +36,7 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PlayArrow
@@ -71,6 +72,7 @@ import com.mytracksapp.data.local.dao.TrackingSessionDao
 import com.mytracksapp.data.settings.SettingsRepository
 import com.mytracksapp.domain.export.ExportFormat
 import com.mytracksapp.domain.export.ExportService
+import com.mytracksapp.domain.geocoding.GeocodingRetryOnStartup
 import com.mytracksapp.domain.session.OrphanedSessionRecovery
 import com.mytracksapp.domain.session.SessionController
 import com.mytracksapp.logging.FileLogger
@@ -82,10 +84,13 @@ import com.mytracksapp.ui.NewSessionViewModelFactory
 import com.mytracksapp.ui.SessionDetailViewModelFactory
 import com.mytracksapp.ui.SettingsViewModelFactory
 import com.mytracksapp.ui.TrackingViewModelFactory
+import com.mytracksapp.ui.LogViewerViewModelFactory
 import com.mytracksapp.ui.history.HistoryListScreen
 import com.mytracksapp.ui.history.HistoryViewModel
 import com.mytracksapp.ui.history.SessionDetailScreen
 import com.mytracksapp.ui.history.SessionDetailViewModel
+import com.mytracksapp.ui.logs.LogViewerScreen
+import com.mytracksapp.ui.logs.LogViewerViewModel
 import com.mytracksapp.ui.newsession.NewSessionScreen
 import com.mytracksapp.ui.newsession.NewSessionViewModel
 import com.mytracksapp.ui.settings.SettingsScreen
@@ -111,6 +116,7 @@ object Routes {
     const val TRACKING = "tracking/{sessionId}"
     const val SESSION_DETAIL = "session_detail/{sessionId}"
     const val SETTINGS = "settings"
+    const val LOGS = "logs"
 
     fun tracking(sessionId: String): String = "tracking/$sessionId"
     fun sessionDetail(sessionId: String): String = "session_detail/$sessionId"
@@ -157,6 +163,7 @@ object AppNavigationTestTags {
     const val MENU_BUTTON = "app_nav_menu_button"
     const val DRAWER = "app_nav_drawer"
     const val DRAWER_SETTINGS_ITEM = "app_nav_drawer_settings_item"
+    const val DRAWER_LOGS_ITEM = "app_nav_drawer_logs_item"
 }
 
 /**
@@ -174,6 +181,7 @@ fun MyTracksApp(
     exportService: ExportService,
     settingsRepository: SettingsRepository,
     orphanedSessionRecovery: OrphanedSessionRecovery,
+    geocodingRetryOnStartup: GeocodingRetryOnStartup,
 ) {
     val navController = rememberNavController()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -186,6 +194,14 @@ fun MyTracksApp(
     // how long orphanedSessionRecovery.recover() takes.
     LaunchedEffect(Unit) {
         recoveredCount = orphanedSessionRecovery.recover()
+    }
+
+    // Independent sibling effect (T06): fire-and-forget startup retry of RF-01's reverse-geocoding
+    // attempt for eligible FINISHED sessions. No shared state with orphanedSessionRecovery above,
+    // and its Int result is not surfaced to any UI (SPEC has no UI requirement for the retry's
+    // outcome), so it is discarded here.
+    LaunchedEffect(Unit) {
+        geocodingRetryOnStartup.retry()
     }
 
     // Separate effect keyed on the result so the Snackbar only fires once recover() completes,
@@ -241,6 +257,31 @@ fun MyTracksApp(
                     ),
                     modifier = Modifier
                         .testTag(AppNavigationTestTags.DRAWER_SETTINGS_ITEM)
+                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                )
+                NavigationDrawerItem(
+                    icon = { Icon(Icons.Filled.Description, contentDescription = null) },
+                    label = {
+                        Text(
+                            text = "Ver logs",
+                            fontFamily = bodyFontFamily,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 15.sp,
+                        )
+                    },
+                    selected = false,
+                    onClick = {
+                        coroutineScope.launch { drawerState.close() }
+                        navController.navigate(Routes.LOGS) { launchSingleTop = true }
+                    },
+                    shape = PillShape,
+                    colors = NavigationDrawerItemDefaults.colors(
+                        unselectedContainerColor = MaterialTheme.colorScheme.background,
+                        unselectedIconColor = MaterialTheme.colorScheme.primary,
+                        unselectedTextColor = MaterialTheme.colorScheme.onBackground,
+                    ),
+                    modifier = Modifier
+                        .testTag(AppNavigationTestTags.DRAWER_LOGS_ITEM)
                         .padding(horizontal = 12.dp, vertical = 4.dp),
                 )
             }
@@ -397,6 +438,10 @@ fun MyTracksApp(
 
                 composable(Routes.SETTINGS) {
                     SettingsRoute(settingsRepository = settingsRepository, trackingSessionDao = trackingSessionDao)
+                }
+
+                composable(Routes.LOGS) {
+                    LogsRoute()
                 }
             }
         }
@@ -586,4 +631,20 @@ private fun SettingsRoute(settingsRepository: SettingsRepository, trackingSessio
     )
 
     SettingsScreen(viewModel = viewModel)
+}
+
+/**
+ * T12 (UI-01, CT-01) — the "Ver logs" drawer destination. Mirrors [SessionDetailRoute]'s
+ * `File(context.filesDir, "exports")` pattern: the [android.content.Context]-relative directory is
+ * resolved here, in the route composable, and only the plain [File] is threaded into
+ * [LogViewerViewModelFactory] — no [android.content.Context] leaks into [LogViewerViewModel] itself.
+ */
+@Composable
+private fun LogsRoute() {
+    val context = LocalContext.current
+    val viewModel: LogViewerViewModel = viewModel(
+        factory = LogViewerViewModelFactory(File(context.filesDir, "logs")),
+    )
+
+    LogViewerScreen(viewModel = viewModel)
 }

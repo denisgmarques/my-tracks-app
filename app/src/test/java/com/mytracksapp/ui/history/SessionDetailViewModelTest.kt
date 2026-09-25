@@ -62,6 +62,10 @@ private class FakeTrackingSessionDaoForSessionDetail(
         error("not used in this test")
     override suspend fun deleteById(sessionId: String) = error("not used in this test")
     override suspend fun deleteAll() = error("not used in this test")
+    override suspend fun getFinishedSessionsWithoutLocationNameSince(
+        status: SessionStatus,
+        sinceTimestamp: Long,
+    ): List<TrackingSessionEntity> = error("not used in this test")
     override suspend fun updateLocationName(sessionId: String, locationName: String?) =
         error("not used in this test")
 }

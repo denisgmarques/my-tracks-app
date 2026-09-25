@@ -49,4 +49,19 @@ interface TrackingSessionDao {
      */
     @Query("UPDATE tracking_sessions SET locationName = :locationName WHERE id = :sessionId")
     suspend fun updateLocationName(sessionId: String, locationName: String?)
+
+    /**
+     * T01 — retry-eligible sessions for [com.mytracksapp.domain.geocoding.GeocodingRetryOnStartup]:
+     * finished sessions still missing a [TrackingSessionEntity.locationName] whose
+     * [TrackingSessionEntity.startTimestamp] falls within the caller-supplied window (RF-01,
+     * RF-04, RF-05). One-shot `suspend` (not `Flow`) since this is a single startup scan, not a
+     * live-observed list.
+     */
+    @Query(
+        "SELECT * FROM tracking_sessions WHERE status = :status AND locationName IS NULL AND startTimestamp >= :sinceTimestamp",
+    )
+    suspend fun getFinishedSessionsWithoutLocationNameSince(
+        status: SessionStatus,
+        sinceTimestamp: Long,
+    ): List<TrackingSessionEntity>
 }

@@ -48,6 +48,11 @@ private class FakeTrackingSessionDao(initial: List<TrackingSessionEntity> = empt
         state.value = emptyList()
     }
 
+    override suspend fun getFinishedSessionsWithoutLocationNameSince(
+        status: SessionStatus,
+        sinceTimestamp: Long,
+    ): List<TrackingSessionEntity> = error("not used in this test")
+
     override suspend fun updateLocationName(sessionId: String, locationName: String?) = error("not used in this test")
 }
 

@@ -81,6 +81,11 @@ class HistoryListScreenTest {
             state.value = emptyList()
         }
 
+        override suspend fun getFinishedSessionsWithoutLocationNameSince(
+            status: SessionStatus,
+            sinceTimestamp: Long,
+        ): List<TrackingSessionEntity> = emptyList()
+
         override suspend fun updateLocationName(sessionId: String, locationName: String?) {
             state.value = state.value.map { session ->
                 if (session.id == sessionId) session.copy(locationName = locationName) else session

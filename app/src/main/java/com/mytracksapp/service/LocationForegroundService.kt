@@ -20,6 +20,7 @@ import com.mytracksapp.data.local.AppDatabase
 import com.mytracksapp.data.local.entity.SessionStatus
 import com.mytracksapp.data.settings.SettingsRepository
 import com.mytracksapp.domain.geocoding.FirstPointGeocodingCoordinator
+import com.mytracksapp.domain.geocoding.GeocodeAndPersist
 import com.mytracksapp.domain.model.GpsPrecision
 import com.mytracksapp.domain.model.SamplingInterval
 import com.mytracksapp.logging.FileLogger
@@ -184,11 +185,8 @@ class LocationForegroundService : Service() {
             )
 
             val reverseGeocoder = AndroidReverseGeocoder(applicationContext)
-            val geocodingCoordinator = FirstPointGeocodingCoordinator(
-                reverseGeocoder = reverseGeocoder,
-                trackingSessionDao = trackingSessionDao,
-                coroutineScope = serviceScope,
-            )
+            val geocodeAndPersist = GeocodeAndPersist(reverseGeocoder, trackingSessionDao)
+            val geocodingCoordinator = FirstPointGeocodingCoordinator(geocodeAndPersist, serviceScope)
 
             val newCollector = LocationCollector(
                 sessionId = sessionId,

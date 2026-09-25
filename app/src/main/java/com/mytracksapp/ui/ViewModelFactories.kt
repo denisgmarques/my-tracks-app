@@ -9,9 +9,11 @@ import com.mytracksapp.domain.session.SessionController
 import com.mytracksapp.permission.LocationPermissionManager
 import com.mytracksapp.ui.history.HistoryViewModel
 import com.mytracksapp.ui.history.SessionDetailViewModel
+import com.mytracksapp.ui.logs.LogViewerViewModel
 import com.mytracksapp.ui.newsession.NewSessionViewModel
 import com.mytracksapp.ui.settings.SettingsViewModel
 import com.mytracksapp.ui.tracking.TrackingViewModel
+import java.io.File
 
 /**
  * Follow-up "wire it all together" task: this codebase uses no DI framework (no Hilt/Koin/etc.)
@@ -93,5 +95,18 @@ class SessionDetailViewModelFactory(
             "Unknown ViewModel class $modelClass"
         }
         return SessionDetailViewModel(sessionId, trackingSessionDao, gpsPointDao, settingsRepository) as T
+    }
+}
+
+/** T11: backs the "Ver logs" screen (T09/T10); [logsDir] is the app's logs directory. */
+class LogViewerViewModelFactory(
+    private val logsDir: File,
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        require(modelClass.isAssignableFrom(LogViewerViewModel::class.java)) {
+            "Unknown ViewModel class $modelClass"
+        }
+        return LogViewerViewModel(logsDir) as T
     }
 }

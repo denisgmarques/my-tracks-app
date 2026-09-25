@@ -15,6 +15,9 @@ import com.mytracksapp.data.local.entity.SessionStatus
 import com.mytracksapp.data.local.entity.TrackingSessionEntity
 import com.mytracksapp.data.settings.SettingsRepository
 import com.mytracksapp.domain.export.ExportService
+import com.mytracksapp.domain.geocoding.GeocodeAndPersist
+import com.mytracksapp.domain.geocoding.GeocodingRetryOnStartup
+import com.mytracksapp.domain.geocoding.ReverseGeocoder
 import com.mytracksapp.domain.model.SamplingInterval
 import com.mytracksapp.domain.session.OrphanedSessionRecovery
 import com.mytracksapp.domain.session.SessionController
@@ -114,6 +117,10 @@ class OrphanedSessionRecoverySnackbarTest {
 
         override suspend fun deleteById(sessionId: String) = error("not used in this test")
         override suspend fun deleteAll() = error("not used in this test")
+        override suspend fun getFinishedSessionsWithoutLocationNameSince(
+            status: SessionStatus,
+            sinceTimestamp: Long,
+        ): List<TrackingSessionEntity> = error("not used in this test")
         override suspend fun updateLocationName(sessionId: String, locationName: String?) = error("not used in this test")
     }
 
@@ -153,6 +160,11 @@ class OrphanedSessionRecoverySnackbarTest {
             state.value = emptyList()
         }
 
+        override suspend fun getFinishedSessionsWithoutLocationNameSince(
+            status: SessionStatus,
+            sinceTimestamp: Long,
+        ): List<TrackingSessionEntity> = emptyList()
+
         override suspend fun updateLocationName(sessionId: String, locationName: String?) = Unit
     }
 
@@ -162,6 +174,11 @@ class OrphanedSessionRecoverySnackbarTest {
         override suspend fun insertAll(points: List<GpsPointEntity>): List<Long> = emptyList()
         override fun getPointsForSession(sessionId: String): Flow<List<GpsPointEntity>> = flowOf(emptyList())
         override suspend fun countForSession(sessionId: String): Int = 0
+    }
+
+    /** No-op [ReverseGeocoder] for [MyTracksApp]'s own `geocodingRetryOnStartup` param — never resolves a name. */
+    private class NoopReverseGeocoder : ReverseGeocoder {
+        override suspend fun reverseGeocode(latitude: Double, longitude: Double): String? = null
     }
 
     /** No-op [SessionController] — no test here ever starts/stops a real session. */
@@ -193,6 +210,11 @@ class OrphanedSessionRecoverySnackbarTest {
                 exportService = ExportService(NoopTrackingSessionDao(), NoopGpsPointDao()),
                 settingsRepository = SettingsRepository(context, dataStoreName),
                 orphanedSessionRecovery = orphanedSessionRecovery,
+                geocodingRetryOnStartup = GeocodingRetryOnStartup(
+                    trackingSessionDao = NoopTrackingSessionDao(),
+                    gpsPointDao = NoopGpsPointDao(),
+                    geocodeAndPersist = GeocodeAndPersist(NoopReverseGeocoder(), NoopTrackingSessionDao()),
+                ),
             )
         }
     }

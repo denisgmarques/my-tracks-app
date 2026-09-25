@@ -33,9 +33,9 @@ import java.time.Instant
  */
 object FileLogger : Logger {
 
-    private const val LOG_DIR_NAME = "logs"
-    private const val LOG_FILE_NAME = "app.log"
-    private const val BACKUP_FILE_NAME = "app.log.1"
+    internal const val LOG_DIR_NAME = "logs"
+    internal const val LOG_FILE_NAME = "app.log"
+    internal const val BACKUP_FILE_NAME = "app.log.1"
 
     /** Rotate once `app.log` reaches this size, per SPEC's "~1MB" sizing. */
     internal const val MAX_LOG_FILE_SIZE_BYTES = 1_048_576L

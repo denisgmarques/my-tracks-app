@@ -241,4 +241,110 @@ class TrackingSessionDaoTest {
         assertEquals(original.averageSpeedMetersPerSecond, stored.averageSpeedMetersPerSecond, 0.0001)
         assertEquals(original.distanceMeters, stored.distanceMeters, 0.0001)
     }
+
+    /**
+     * T01 — [TrackingSessionDao.getFinishedSessionsWithoutLocationNameSince] returns a
+     * `FINISHED`/`locationName=null` session whose `startTimestamp` is within the caller's
+     * window (RF-01).
+     */
+    @Test
+    fun getFinishedSessionsWithoutLocationNameSince_returnsSessionWithinWindow() = runBlocking {
+        val now = 1_700_000_000_000L
+        val sessionId = UUID.randomUUID().toString()
+        sessionDao.insert(
+            TrackingSessionEntity(
+                id = sessionId,
+                samplingIntervalSeconds = 15,
+                startTimestamp = now - 3_600_000L, // now - 1h
+                status = SessionStatus.FINISHED,
+                locationName = null,
+            ),
+        )
+
+        val eligible = sessionDao.getFinishedSessionsWithoutLocationNameSince(
+            SessionStatus.FINISHED,
+            now - 86_400_000L,
+        )
+
+        assertEquals(1, eligible.size)
+        assertEquals(sessionId, eligible.first().id)
+    }
+
+    /**
+     * T01 — a `FINISHED`/`locationName=null` session outside the 24h window is NOT returned
+     * (RF-04).
+     */
+    @Test
+    fun getFinishedSessionsWithoutLocationNameSince_excludesSessionOutsideWindow() = runBlocking {
+        val now = 1_700_000_000_000L
+        val sessionId = UUID.randomUUID().toString()
+        sessionDao.insert(
+            TrackingSessionEntity(
+                id = sessionId,
+                samplingIntervalSeconds = 15,
+                startTimestamp = now - 90_000_000L, // now - 25h
+                status = SessionStatus.FINISHED,
+                locationName = null,
+            ),
+        )
+
+        val eligible = sessionDao.getFinishedSessionsWithoutLocationNameSince(
+            SessionStatus.FINISHED,
+            now - 86_400_000L,
+        )
+
+        assertEquals(0, eligible.size)
+    }
+
+    /**
+     * T01 — a `FINISHED` session that already has a non-null `locationName` is NOT returned,
+     * regardless of `startTimestamp` (RF-05).
+     */
+    @Test
+    fun getFinishedSessionsWithoutLocationNameSince_excludesSessionWithLocationName() = runBlocking {
+        val now = 1_700_000_000_000L
+        val sessionId = UUID.randomUUID().toString()
+        sessionDao.insert(
+            TrackingSessionEntity(
+                id = sessionId,
+                samplingIntervalSeconds = 15,
+                startTimestamp = now - 3_600_000L, // now - 1h
+                status = SessionStatus.FINISHED,
+                locationName = "Downtown",
+            ),
+        )
+
+        val eligible = sessionDao.getFinishedSessionsWithoutLocationNameSince(
+            SessionStatus.FINISHED,
+            now - 86_400_000L,
+        )
+
+        assertEquals(0, eligible.size)
+    }
+
+    /**
+     * T01 — an `ACTIVE` session with `locationName=null` and a recent `startTimestamp` is NOT
+     * returned; only `FINISHED` sessions match the query's `status` filter.
+     */
+    @Test
+    fun getFinishedSessionsWithoutLocationNameSince_excludesActiveSession() = runBlocking {
+        val now = 1_700_000_000_000L
+        val sessionId = UUID.randomUUID().toString()
+        sessionDao.insert(
+            TrackingSessionEntity(
+                id = sessionId,
+                samplingIntervalSeconds = 15,
+                startTimestamp = now - 3_600_000L, // now - 1h
+                status = SessionStatus.ACTIVE,
+                locationName = null,
+            ),
+        )
+
+        val eligible = sessionDao.getFinishedSessionsWithoutLocationNameSince(
+            SessionStatus.FINISHED,
+            now - 86_400_000L,
+        )
+
+        assertEquals(0, eligible.size)
+    }
 }

@@ -65,6 +65,11 @@ private class FakeTrackingSessionDaoForHistory(initial: List<TrackingSessionEnti
         state.value = emptyList()
     }
 
+    override suspend fun getFinishedSessionsWithoutLocationNameSince(
+        status: SessionStatus,
+        sinceTimestamp: Long,
+    ): List<TrackingSessionEntity> = error("not used in this test")
+
     override suspend fun updateLocationName(sessionId: String, locationName: String?) {
         state.value = state.value.map { session ->
             if (session.id == sessionId) session.copy(locationName = locationName) else session

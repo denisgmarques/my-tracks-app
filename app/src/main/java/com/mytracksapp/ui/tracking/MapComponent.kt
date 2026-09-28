@@ -149,14 +149,25 @@ fun MapComponent(
     LaunchedEffect(polyline, markers, googleMap) {
         val map = googleMap ?: return@LaunchedEffect
 
-        currentOverlay?.remove()
         currentMarkers.forEach { it.remove() }
 
         val latLngPoints = polyline.map { LatLng(it.latitude, it.longitude) }
-        currentOverlay = if (latLngPoints.size >= 2) {
-            map.addPolyline(PolylineOptions().addAll(latLngPoints))
-        } else {
-            null
+        val existingOverlay = currentOverlay
+        currentOverlay = when {
+            // Mutate the existing native Polyline in place instead of tearing it down and
+            // creating a new one on every single GPS sample: for a long session this avoided a
+            // per-update alloc/dealloc churn on the Maps renderer's overlay object that was
+            // driving heap pressure high enough to throw OutOfMemoryError deep inside
+            // GoogleMap.addPolyline's Binder transact (crashed a real ~66min/~4k-point session).
+            existingOverlay != null && latLngPoints.size >= 2 -> {
+                existingOverlay.points = latLngPoints
+                existingOverlay
+            }
+            latLngPoints.size >= 2 -> map.addPolyline(PolylineOptions().addAll(latLngPoints))
+            else -> {
+                existingOverlay?.remove()
+                null
+            }
         }
 
         currentMarkers = markers.mapNotNull { marker ->
